@@ -46,6 +46,7 @@ module.exports = function (ctx) {
         'QPage',
         'QField',
         'QInput',
+        'QBtn',
         'QUploader',
         'QSelect',
         'QDatetime'
