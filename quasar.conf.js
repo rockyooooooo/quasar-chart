@@ -49,7 +49,8 @@ module.exports = function (ctx) {
         'QBtn',
         'QUploader',
         'QSelect',
-        'QDatetime'
+        'QDatetime',
+        'QTable'
       ],
       directives: [
         'Ripple'
