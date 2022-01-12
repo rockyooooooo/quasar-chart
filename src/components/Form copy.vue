@@ -1,5 +1,53 @@
 <template>
-  <div style="min-width: 500px; max-width: 90vw;">
+  <div style="width: 500px; max-width: 90vw;">
+    <p class="caption">Single File Upload</p>
+    <q-uploader
+      :multiple="false"
+      :url="''"
+      :upload-factory="uploadFile"
+      @uploaded="uploaded"
+    />
+    <p class="caption">User</p>
+    <q-select
+      v-model="user"
+      :options="users"
+      :disable="isUserSelectDisabled"
+      @input="userOnChange"
+    />
+    <p class="caption">Start date</p>
+    <q-datetime
+      v-model="startDate"
+      type="date"
+      :default-value="defaulteStartDate"
+      :disable="isStartDateSelectDisabled"
+      :min="minStartDate"
+      :max="maxStartDate"
+      @change="startDateOnChange"
+    />
+    <p class="caption">Comparison date</p>
+    <q-select
+      v-model="comparisonDate"
+      :options="comparisonDates"
+      :disable="isComparisonDateSelectDisabled"
+      @input="comparisonDateOnChange"
+    />
+    <!-- <q-datetime
+      v-model="comparisonDate"
+      type="date"
+      :disable="isComparisonDateSelectDisabled"
+      :min="minComparisonDate"
+      :max="maxComparisonDate"
+      @change="comparisonDateOnChange"
+    /> -->
+    <!-- <Chart :dataset="dataset" /> -->
+    <q-table
+      :loading="isLoading"
+      title="Table Title"
+      :data="dataset"
+      :columns="columns"
+      row-key="name"
+    />
+    <q-btn @click="flipTable">Flip</q-btn>
     <div class="chart-container">
       <svg class="chart"></svg>
     </div>
@@ -14,13 +62,178 @@
 </style>
 
 <script>
+// import Chart from './Chart.vue'
 import * as d3 from 'd3'
 
 const weekDays = 7
 
 export default {
-  name: 'BarChart',
+  name: 'Form',
+  data () {
+    return {
+      users: [],
+      dataset: [],
+      user: '',
+      userBpsPerDate: [],
+      defaulteStartDate: '',
+      minStartDate: '',
+      maxStartDate: '',
+      startDate: '',
+      baseDates: [],
+      comparisonDate: '',
+      comparisonDates: [],
+      isUserSelectDisabled: true,
+      isStartDateSelectDisabled: true,
+      isComparisonDateSelectDisabled: true,
+      columns: [
+        {
+          name: 'time',
+          label: 'Time',
+          field: (item) => item[0]
+        },
+        {
+          name: 'user',
+          label: 'user',
+          field: (item) => item[1]
+        },
+        {
+          name: 'topIP',
+          label: 'Top IP',
+          field: (item) => item[2]
+        },
+        {
+          name: 'nation',
+          label: '國別',
+          field: (item) => item[3]
+        },
+        {
+          name: 'OTTService',
+          label: 'OTT Service',
+          field: (item) => item[4]
+        },
+        {
+          name: 'bps',
+          label: 'bps',
+          field: (item) => item[5]
+        }
+      ],
+      isLoading: false
+    }
+  },
   methods: {
+    resetData () {
+      d3.select('.chart').selectAll('*').remove()
+      this.users = []
+      this.dataset = []
+      this.user = ''
+      this.userBpsPerDate = []
+      this.minStartDate = ''
+      this.maxStartDate = ''
+      this.startDate = ''
+      this.baseDates = []
+      this.comparisonDate = ''
+      this.comparisonDates = []
+      this.isUserSelectDisabled = true
+      this.isStartDateSelectDisabled = true
+      this.isComparisonDateSelectDisabled = true
+    },
+    uploadFile (file, updateProgress) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true
+        resolve(file)
+      })
+    },
+    uploaded (file) {
+      const reader = new FileReader()
+
+      reader.onload = (evt) => {
+        console.time('upload')
+        this.resetData()
+
+        const inputData = evt.target.result
+
+        const users = {}
+        const data = inputData.split(/\n/)
+
+        const values = data.filter((item) => item !== '')
+          .map((item) => item.split(',').map((value, index) => {
+            const trimedValue = value.trim()
+            if (index === 1) users[trimedValue] = true
+            return trimedValue
+          }))
+
+        for (const prop in users) {
+          this.users.push({ label: prop, value: prop })
+        }
+
+        this.dataset = values
+        this.isUserSelectDisabled = false
+        this.isLoading = false
+        console.timeEnd('upload')
+      }
+      reader.readAsText(file)
+    },
+    userOnChange (user) {
+      d3.select('.chart').selectAll('*').remove()
+      this.userBpsPerDate = []
+      this.minStartDate = ''
+      this.maxStartDate = ''
+      this.startDate = ''
+      this.comparisonDate = ''
+      this.isStartDateSelectDisabled = true
+
+      const userData = this.dataset.filter((item) => item[1] === user)
+      const result = this.accumulateBpsPerDate(userData)
+      this.userBpsPerDate = result
+
+      const dates = result.map((item) => item[0])
+      this.defaulteStartDate = dates[0]
+      this.minStartDate = dates[0]
+      this.maxStartDate = dates[dates.length - 1]
+      this.isStartDateSelectDisabled = false
+    },
+    accumulateBpsPerDate (data) {
+      const dateBps = {}
+      data
+        .filter((item) => item !== '')
+        .forEach((item) => { // 可以試試看用 reduce
+          const date = item[0].slice(0, 10)
+          if (!dateBps[date]) {
+            dateBps[date] = Number(item[5]) || 0 // todo: improve hardcoding
+          } else {
+            dateBps[date] += Number(item[5]) || 0 // todo: improve hardcoding
+          }
+        })
+      return Object.entries(dateBps)
+    },
+    startDateOnChange (value) {
+      d3.select('.chart').selectAll('*').remove()
+
+      const date = value.slice(0, 10)
+      const startIndex = this.userBpsPerDate.findIndex((item) => item[0] === date)
+      const selectedDates = this.userBpsPerDate.slice(startIndex, startIndex + weekDays)
+      this.baseDates = selectedDates
+
+      const validComparisonDates = []
+      for (let i = startIndex - weekDays; i + weekDays > 0; i -= weekDays) {
+        const endIndex = i + weekDays - 1
+        if (i < 0) i = 0
+        validComparisonDates.push({
+          label: `${this.userBpsPerDate[i][0]} ~ ${this.userBpsPerDate[endIndex][0]}`,
+          value: [this.userBpsPerDate[i][0], endIndex - i]
+        })
+      }
+      this.comparisonDates = validComparisonDates
+
+      this.isComparisonDateSelectDisabled = false
+    },
+    comparisonDateOnChange (value) {
+      const date = value[0]
+      const offset = value[1] + 1
+      const startIndex = this.userBpsPerDate.findIndex((item) => item[0] === date)
+      const selectedDates = this.userBpsPerDate.slice(startIndex, startIndex + offset)
+      this.renderBarChart(this.baseDates.slice(0, weekDays), selectedDates)
+    },
     renderBarChart (baseDates, comparisonDates) {
       d3.select('.chart').selectAll('*').remove()
 
@@ -44,6 +257,15 @@ export default {
 
       const paddedBaseDates = padData(baseDates, 'push')
       const paddedComparisonDates = padData(comparisonDates, 'unshift')
+      const growthRates = paddedBaseDates.map((item, index) => [
+        item[0],
+        paddedComparisonDates[index][1] === min // 檢查上週數據是否為最小值
+          ? 999 // 成長率是無限的話，先設為 999
+          : item[1] === min // 上週數據不是最小值，檢查這週數據是否為最小值
+            ? Math.round(((0 - paddedComparisonDates[index][1]) / paddedComparisonDates[index][1]) * 100) // 這週數據是最小值，用 0 計算成長率(其實成長率就是 -100%)
+            : Math.round(((item[1] - paddedComparisonDates[index][1]) / paddedComparisonDates[index][1]) * 100) // 這週數據不是最小值，計算成長率
+      ])
+      console.log({ growthRates, paddedBaseDates, paddedComparisonDates, min })
 
       const xLinear = d3.scaleBand()
         .domain(paddedBaseDates.map((item) => item[0]))
@@ -61,9 +283,16 @@ export default {
         .domain([max, min])
         .range([0, chartHeight])
 
-      const reverseLineYLinear = d3.scaleLinear()
-        .domain([max, min])
+      // const reverseLineYLinear = d3.scaleLinear()
+      //   .domain([max, min])
+      //   .range([0, chartHeight])
+
+      const rateYLinear = d3.scaleLinear()
+        .domain([d3.max(growthRates.map((item) => item[1])), d3.min(growthRates.map((item) => item[1]))])
         .range([0, chartHeight])
+      // const rateYLinear = d3.scaleLinear()
+      //   .domain([100, -100])
+      //   .range([0, chartHeight])
 
       const chart = d3.select('.chart')
         .attr('width', chartWidth)
@@ -82,12 +311,17 @@ export default {
           const units = ['', 'k', 'm', 'b']
           return remainder + units[counter]
         })
+      const rateYAxis = d3.axisRight(rateYLinear)
+        .tickFormat((d) => d + '%')
 
       chart.append('g')
         .attr('transform', `translate(0, ${chartHeight})`)
         .call(xAxis)
       chart.append('g').call(comparisonXAxis)
       chart.append('g').call(yAxis)
+      chart.append('g')
+        .attr('transform', `translate(${chartHeight}, 0)`)
+        .call(rateYAxis)
 
       const interval = ((chartWidth - (paddedBaseDates.length * barWidth)) / (paddedBaseDates.length))
       chart.selectAll('rect')
@@ -102,13 +336,13 @@ export default {
         .attr('class', 'bars')
 
       chart.append('path')
-        .datum(paddedComparisonDates.map((item) => item[1]))
+        .datum(growthRates.map((item) => item[1]))
         .attr('fill', 'none')
         .attr('stroke', '#FEDE00')
         .attr('stroke-width', 2)
         .attr('d', d3.line()
           .x((d, i) => i * (barWidth + interval) + (interval / 2) + (barWidth / 2))
-          .y((d) => reverseLineYLinear(d))
+          .y((d) => rateYLinear(d))
         )
         .attr('class', 'line')
 
@@ -249,6 +483,18 @@ export default {
       //   .text((d) => d)
 
       // ===========================================================
+    },
+    flipTable () {
+      const tbodyTrs = d3.select('tbody')
+        .selectAll('tr')
+
+      const temp = []
+      tbodyTrs.forEach((item, i) => {
+        item.forEach((elem, j) => {
+
+        })
+      })
+      console.log(temp)
     }
   }
 }
