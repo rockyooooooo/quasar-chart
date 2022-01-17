@@ -20,7 +20,7 @@
       :columns="columns"
       row-key="name"
     />
-    <q-btn @click="flipTable">Flip</q-btn>
+    <q-btn @click="handleFlip" :disable="isFlipDiabled">Flip</q-btn>
   </div>
 </template>
 
@@ -94,8 +94,11 @@ export default {
       ips: [],
       nations: [],
       otts: [],
-      isTypeSelectDisabled: true
-      // hasFlipped: false
+      isTypeSelectDisabled: true,
+      firstColumnType: 'times',
+      columnsType: '',
+      hasFlipped: false,
+      isFlipDiabled: true
     }
   },
   methods: {
@@ -113,13 +116,12 @@ export default {
 
       reader.onload = (evt) => {
         const inputData = evt.target.result
-        console.time('upload')
+        console.time('process data')
         const processedData = this.processData(inputData)
-        console.timeEnd('upload')
+        console.timeEnd('process data')
 
         this.dataset = processedData
         this.datasetForTable = processedData
-
         this.isTypeSelectDisabled = false
       }
       reader.readAsText(file)
@@ -159,13 +161,16 @@ export default {
       ]
       this.dataset = []
       this.datasetForTable = []
+      this.type = ''
       this.times = []
       this.users = []
       this.ips = []
       this.nations = []
       this.otts = []
+      this.isFlipDiabled = true
     },
     processData (data) {
+      const times = {}
       const users = {}
       const nations = {}
       const otts = {}
@@ -182,8 +187,9 @@ export default {
             ? arr
             : arr.slice(0, 3).concat([arr[3] + ', ' + arr[4]]).concat(arr.slice(5))
 
-          // 出現過的 user, nation, ott 用 object 存，讓他不會重複
+          // 出現過的 time, user, nation, ott 用 object 存，讓他不會重複
           result.forEach((field, index) => {
+            if (index === 0) times[field] = true
             if (index === 1) users[field] = true
             if (index === 3) nations[field] = true
             if (index === 4) otts[field] = true
@@ -192,7 +198,10 @@ export default {
           return result
         })
 
-      // 把 user, nation, ott 存成一個清單
+      // 把 times, user, nation, ott 用 array 存成一個清單
+      for (const prop in times) {
+        this.times.push(prop)
+      }
       for (const prop in users) {
         this.users.push(prop)
       }
@@ -206,26 +215,34 @@ export default {
       return processedData
     },
     typeOnChange () {
-      this.generateColumns()
-      console.time('aggregate')
-      const aggregatedData = this.aggregate(this.dataset, this.type)
-      console.timeEnd('aggregate')
-      console.time('transfer')
-      const transferedData = this.transfer(aggregatedData, this.type)
-      console.timeEnd('transfer')
+      this.isFlipDiabled = false
 
+      this.generateColumns()
+      const aggregatedData = this.aggregate(this.dataset, this.type)
+      const transferedData = this.transfer(aggregatedData, this.type)
       this.datasetForTable = transferedData
+
+      if (this.hasFlipped) this.flipTable()
     },
     generateColumns () {
+      this.columnsType = this.hasFlipped ? 'times' : this.type
+      this.firstColumnType = this.hasFlipped ? this.type : 'times'
+      const columnsValue = this[this.columnsType]
+
       this.columns = []
-      this.columns.push({ name: 'date', label: 'Time', field: (item) => item[item.length - 1] })
-      this[this.type].forEach((type, index) => this.columns.push({
-        name: type,
-        label: type,
-        field: (item) => item[index]
+      this.columns.push({
+        name: this.firstColumnType,
+        label: this.firstColumnType + ' / ' + this.columnsType,
+        field: (item) => item[item.length - 1],
+        align: 'center'
+      })
+      columnsValue.forEach((field, index) => this.columns.push({
+        name: field,
+        label: field,
+        field: (item) => item[index] // note: 如果 dataset 是物件，這邊可以直接放 key，就會找到對應的 value，就不用為了轉成 array 又要對齊 column 的位置
       }))
     },
-    aggregate (data, type) {
+    aggregate (processedData, type) {
       let aggregatedData = {}
       let targetTypeIndex = 0
       switch (type) {
@@ -240,7 +257,7 @@ export default {
           break
       }
 
-      data.forEach((item) => {
+      processedData.forEach((item) => {
         // 找出 time，沒有就 push 新增一個，已經有存了就直接放進去原本的
         if (aggregatedData[item[0]]) {
           // 根據下拉選單選定的 type 找到該欄位，找不到就 push 新增一個，已經有存了就直接跟原本的加起來
@@ -255,64 +272,31 @@ export default {
       })
       return aggregatedData
     },
-    transfer (data, type) {
-      return Object.entries(data).map((row) => {
+    transfer (aggregatedData, type) {
+      return Object.entries(aggregatedData).map((row) => {
+        // 建立一個只放 bps 的 array
         const newRow = Array(this[type].length).fill(0)
         for (const field in row[1]) {
           const fieldIndex = this[type].indexOf(field)
           newRow[fieldIndex] += row[1][field]
         }
+        // 最後把 X 軸的 label 放進去做二維 table
         newRow.push(row[0])
         return newRow
       })
     },
+    handleFlip () {
+      this.hasFlipped = !this.hasFlipped
+      this.flipTable()
+    },
     flipTable () {
-      // =============改變 dataset 的排列 part.2============
-      // 1. 把 columns 換成 times
-      const arr = this.datasetForTable.map((item) => item.pop())
-      console.log(arr, this.datasetForTable)
-      // 2. 把 times 換成 columns
-      // 3. flipArray()
-      // =======================End=======================
-
-      // ===================用 CSS 來翻===================
-      // document.querySelector('.q-table-container').classList.toggle('flipped')
-      // =======================End=======================
-
-      // ================改變 dataset 的排列================
-      // q1. 翻頁功能會變成翻 head，沒有翻資料
-      // const flippedDataset = this.flipArray(this.dataset)
-      // this.dataset = flippedDataset
-      // =======================End=======================
-
-      // ===================直接操作 DOM===================
-      // q1. thead 的部分要再想辦法調整（th 有留住，但是 thead 不知道怎麼留）
-      // q2. 新上傳檔案的時候要把 table 清掉
-      // const tbody = document.querySelector('tbody')
-      // const trs = [...tbody.children]
-      // const tableArr = trs.map((item) => [...item.children])
-
-      // let flippedFullArr = []
-      // if (!this.hasFlipped) {
-      //   const ths = [...document.querySelectorAll('th')]
-      //   const fullArr = [ths, ...tableArr]
-      //   flippedFullArr = this.flipArray(fullArr)
-      // } else {
-      //   flippedFullArr = this.flipArray(tableArr)
-      // }
-
-      // tbody.innerHTML = ''
-      // for (let i = 0; i < flippedFullArr.length; i++) {
-      //   const tr = document.createElement('tr')
-      //   for (let j = 0; j < flippedFullArr[i].length; j++) {
-      //     tr.append(flippedFullArr[i][j])
-      //   }
-      //   tbody.append(tr)
-      // }
-
-      // document.querySelector('thead').innerHTML = ''
-      // this.hasFlipped = true
-      // =======================End=======================
+      this.generateColumns()
+      const flippedArray = this.flipArray(this.datasetForTable)
+      while (flippedArray.length > this[this.firstColumnType].length) {
+        flippedArray.pop()
+      }
+      flippedArray.forEach((row, index) => row.push(this[this.firstColumnType][index]))
+      this.datasetForTable = flippedArray
     },
     flipArray (arr) {
       const flippedArr = []
