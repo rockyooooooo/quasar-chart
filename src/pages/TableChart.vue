@@ -1,5 +1,5 @@
 <template>
-  <div style="width: 500px; max-width: 90vw;">
+  <div style="min-width: 500px; width: 800px; max-width: 90vw;">
     <p class="caption">Single File Upload</p>
     <q-uploader
       :multiple="false"
@@ -13,6 +13,13 @@
       :options="types"
       :disable="isTypeSelectDisabled"
       @input="typeOnChange"
+    />
+    <p class="caption">Granularity</p>
+    <q-select
+      v-model="granularity"
+      :options="granularities"
+      :disable="isGranularitySelectDisabled"
+      @input="granularityOnChange"
     />
     <q-table
       title="Table Title"
@@ -83,18 +90,30 @@ export default {
       columns: [],
       dataset: [],
       datasetForTable: [],
+      aggregatedData: {},
+      allTimes: [],
+      times: [],
+      users: [],
+      ips: [],
+      nations: [],
+      otts: [],
       type: '',
       types: [
         { label: 'User', value: 'users' },
         { label: 'Nation', value: 'nations' },
         { label: 'OTT Service', value: 'otts' }
       ],
-      times: [],
-      users: [],
-      ips: [],
-      nations: [],
-      otts: [],
       isTypeSelectDisabled: true,
+      granularity: '30',
+      granularities: [
+        { label: '5 mins', value: 5 },
+        { label: '30 mins', value: 30 },
+        { label: '1 hr', value: 60 },
+        { label: '3 hrs', value: 60 * 3 },
+        { label: '6 hrs', value: 60 * 6 },
+        { label: '1 day', value: 60 * 24 }
+      ],
+      isGranularitySelectDisabled: true,
       firstColumnType: 'times',
       columnsType: '',
       hasFlipped: false,
@@ -161,13 +180,18 @@ export default {
       ]
       this.dataset = []
       this.datasetForTable = []
+      this.aggregatedData = {}
       this.type = ''
+      this.allTimes = []
       this.times = []
       this.users = []
       this.ips = []
       this.nations = []
       this.otts = []
+      this.granularity = 5
       this.isFlipDiabled = true
+      this.isGranularitySelectDisabled = true
+      this.hasFlipped = false
     },
     processData (data) {
       const times = {}
@@ -200,8 +224,9 @@ export default {
 
       // 把 times, user, nation, ott 用 array 存成一個清單
       for (const prop in times) {
-        this.times.push(prop)
+        this.allTimes.push(prop)
       }
+      this.times = this.allTimes
       for (const prop in users) {
         this.users.push(prop)
       }
@@ -219,8 +244,25 @@ export default {
 
       this.generateColumns()
       const aggregatedData = this.aggregate(this.dataset, this.type)
-      const transferedData = this.transfer(aggregatedData, this.type)
-      this.datasetForTable = transferedData
+      const transferredData = this.transfer(aggregatedData, this.type, this.granularity)
+      this.aggregatedData = aggregatedData
+      this.datasetForTable = transferredData
+      this.isGranularitySelectDisabled = false
+
+      if (this.hasFlipped) this.flipTable()
+    },
+    granularityOnChange () {
+      const newTimes = [this.times[0]]
+      // note: 可能可以改用 this.times.filter
+      this.allTimes.forEach((time, index) => {
+        if (new Date(time) - new Date(newTimes[newTimes.length - 1]) >= this.granularity * 60 * 1000) {
+          newTimes.push(time)
+        }
+      })
+      this.times = newTimes
+      this.generateColumns()
+      const transferredData = this.transfer(this.aggregatedData, this.type, this.granularity)
+      this.datasetForTable = transferredData
 
       if (this.hasFlipped) this.flipTable()
     },
@@ -239,7 +281,8 @@ export default {
       columnsValue.forEach((field, index) => this.columns.push({
         name: field,
         label: field,
-        field: (item) => item[index] // note: 如果 dataset 是物件，這邊可以直接放 key，就會找到對應的 value，就不用為了轉成 array 又要對齊 column 的位置
+        sortable: true,
+        field: (item) => item[index] // note: 如果 dataset 是物件，這邊可以直接放 key，就會找到對應的 value，就不用為了轉成 array 又要對齊 column 的位置。但是這樣 datasetForTable 會不知道怎麼做。
       }))
     },
     aggregate (processedData, type) {
@@ -272,18 +315,29 @@ export default {
       })
       return aggregatedData
     },
-    transfer (aggregatedData, type) {
-      return Object.entries(aggregatedData).map((row) => {
+    transfer (aggregatedData, type, granularity) {
+      const transferredData = []
+      let count = 0
+      let newRow = Array(this[type].length).fill(0)
+      Object.entries(aggregatedData).forEach((row, index) => {
         // 建立一個只放 bps 的 array
-        const newRow = Array(this[type].length).fill(0)
+        if (new Date(row[0]) - new Date(this.times[count]) >= granularity * 60 * 1000) {
+          // 把 X 軸的 label 放進去做二維 table
+          newRow.push(this.times[count])
+          transferredData.push(newRow)
+          newRow = Array(this[type].length).fill(0)
+          count++
+        }
         for (const field in row[1]) {
           const fieldIndex = this[type].indexOf(field)
           newRow[fieldIndex] += row[1][field]
         }
-        // 最後把 X 軸的 label 放進去做二維 table
-        newRow.push(row[0])
-        return newRow
+        if (index === this.allTimes.length - 1) {
+          newRow.push(this.times[count])
+          transferredData.push(newRow)
+        }
       })
+      return transferredData
     },
     handleFlip () {
       this.hasFlipped = !this.hasFlipped
