@@ -104,7 +104,7 @@ export default {
         { label: 'OTT Service', value: 'otts' }
       ],
       isTypeSelectDisabled: true,
-      granularity: '30',
+      granularity: 30,
       granularities: [
         { label: '5 mins', value: 5 },
         { label: '30 mins', value: 30 },
@@ -123,9 +123,6 @@ export default {
   methods: {
     uploadFile (file, updateProgress) {
       this.reset()
-      // this.hasFlipped = false
-      document.querySelector('tbody').innerHTML = ''
-
       return new Promise((resolve, reject) => {
         resolve(file)
       })
@@ -135,12 +132,12 @@ export default {
 
       reader.onload = (evt) => {
         const inputData = evt.target.result
-        console.time('process data')
-        const processedData = this.processData(inputData)
-        console.timeEnd('process data')
+        console.time('parse data')
+        const parsedData = this.parseData(inputData)
+        console.timeEnd('parse data')
 
-        this.dataset = processedData
-        this.datasetForTable = processedData
+        this.dataset = parsedData
+        this.datasetForTable = parsedData
         this.isTypeSelectDisabled = false
       }
       reader.readAsText(file)
@@ -193,13 +190,13 @@ export default {
       this.isGranularitySelectDisabled = true
       this.hasFlipped = false
     },
-    processData (data) {
+    parseData (data) {
       const times = {}
       const users = {}
       const nations = {}
       const otts = {}
 
-      const processedData = data.split(/\n/)
+      const parsedData = data.split(/\n/)
         .filter((item) => item !== '')
         .map((item) => {
           let arr = item.split(',')
@@ -237,14 +234,16 @@ export default {
         this.otts.push(prop)
       }
 
-      return processedData
+      return parsedData
     },
     typeOnChange () {
       this.isFlipDiabled = false
 
       this.generateColumns()
       const aggregatedData = this.aggregate(this.dataset, this.type)
+      console.log(aggregatedData)
       const transferredData = this.transfer(aggregatedData, this.type, this.granularity)
+      console.log(transferredData)
       this.aggregatedData = aggregatedData
       this.datasetForTable = transferredData
       this.isGranularitySelectDisabled = false
@@ -254,7 +253,7 @@ export default {
     granularityOnChange () {
       const newTimes = [this.times[0]]
       // note: 可能可以改用 this.times.filter
-      this.allTimes.forEach((time, index) => {
+      this.allTimes.forEach((time) => {
         if (new Date(time) - new Date(newTimes[newTimes.length - 1]) >= this.granularity * 60 * 1000) {
           newTimes.push(time)
         }
@@ -285,7 +284,7 @@ export default {
         field: (item) => item[index] // note: 如果 dataset 是物件，這邊可以直接放 key，就會找到對應的 value，就不用為了轉成 array 又要對齊 column 的位置。但是這樣 datasetForTable 會不知道怎麼做。
       }))
     },
-    aggregate (processedData, type) {
+    aggregate (parsedData, type) {
       let aggregatedData = {}
       let targetTypeIndex = 0
       switch (type) {
@@ -300,7 +299,7 @@ export default {
           break
       }
 
-      processedData.forEach((item) => {
+      parsedData.forEach((item) => {
         // 找出 time，沒有就 push 新增一個，已經有存了就直接放進去原本的
         if (aggregatedData[item[0]]) {
           // 根據下拉選單選定的 type 找到該欄位，找不到就 push 新增一個，已經有存了就直接跟原本的加起來

@@ -10,9 +10,16 @@
     <p class="caption">User</p>
     <q-select
       v-model="user"
-      :options="users"
+      :options="userOptions"
       :disable="isUserSelectDisabled"
       @input="userOnChange"
+    />
+    <p class="caption">Granularity</p>
+    <q-select
+      v-model="granularity"
+      :options="granularities"
+      :disable="isGranularitySelectDisabled"
+      @input="granularityOnChange"
     />
     <p class="caption">Start date</p>
     <q-datetime
@@ -54,8 +61,19 @@ export default {
   data () {
     return {
       users: [],
+      userOptions: [],
+      allTimes: [],
+      times: [],
       dataset: [],
+      aggregatedData: {},
       user: '',
+      granularity: 60 * 3,
+      granularities: [
+        { label: '3 hrs', value: 60 * 3 },
+        { label: '6 hrs', value: 60 * 6 },
+        { label: '1 day', value: 60 * 24 }
+      ],
+      isGranularitySelectDisabled: true,
       userBpsPerDate: [],
       defaulteStartDate: '',
       minStartDate: '',
@@ -70,6 +88,26 @@ export default {
     }
   },
   methods: {
+    uploadFile (file, updateProgress) {
+      this.resetData()
+      return new Promise((resolve, reject) => {
+        resolve(file)
+      })
+    },
+    uploaded (file) {
+      const reader = new FileReader()
+
+      reader.onload = (evt) => {
+        const inputData = evt.target.result
+        console.time('parse data')
+        const parsedData = this.parseData(inputData)
+        console.timeEnd('parse data')
+
+        this.dataset = parsedData
+        this.isUserSelectDisabled = false
+      }
+      reader.readAsText(file)
+    },
     resetData () {
       d3.select('.chart').selectAll('*').remove()
       this.users = []
@@ -83,44 +121,53 @@ export default {
       this.comparisonDate = ''
       this.comparisonDates = []
       this.isUserSelectDisabled = true
+      this.isGranularitySelectDisabled = true
       this.isStartDateSelectDisabled = true
       this.isComparisonDateSelectDisabled = true
     },
-    uploadFile (file, updateProgress) {
-      return new Promise((resolve, reject) => {
-        this.isLoading = true
-        resolve(file)
-      })
-    },
-    uploaded (file) {
-      const reader = new FileReader()
+    parseData (data) {
+      const times = {}
+      const users = {}
 
-      reader.onload = (evt) => {
-        console.time('upload')
-        this.resetData()
+      const parsedData = data.split(/\n/)
+        .filter((item) => item !== '')
+        .map((item) => {
+          let arr = item.split(',')
+            .map((value) => value.trim())
 
-        const inputData = evt.target.result
+          // 處理 OTT 含有 comma 的情況，因為會被 split，要把他 concat 回來
+          // 不過目前用 hard code 的方法處理，之後可以想辦法寫的更漂亮一點
+          let result = arr.length === 6
+            ? arr
+            : arr.slice(0, 3).concat([arr[3] + ', ' + arr[4]]).concat(arr.slice(5))
 
-        const users = {}
-        const data = inputData.split(/\n/)
+          // 出現過的 user 用 object 存，讓他不會重複
+          result.forEach((field, index) => {
+            if (index === 0) times[field] = true
+            if (index === 1) users[field] = true
+          })
 
-        const values = data.filter((item) => item !== '')
-          .map((item) => item.split(',').map((value, index) => {
-            const trimedValue = value.trim()
-            if (index === 1) users[trimedValue] = true
-            return trimedValue
-          }))
+          return result
+        })
 
-        for (const prop in users) {
-          this.users.push({ label: prop, value: prop })
-        }
-
-        this.dataset = values
-        this.isUserSelectDisabled = false
-        this.isLoading = false
-        console.timeEnd('upload')
+      // 把 times 存起來要設 granularity
+      for (const prop in times) {
+        this.allTimes.push(prop)
       }
-      reader.readAsText(file)
+      const newTimes = [this.allTimes[0]]
+      this.allTimes.forEach((time) => {
+        if (new Date(time) - new Date(newTimes[newTimes.length - 1]) >= this.granularity * 60 * 1000) {
+          newTimes.push(time)
+        }
+      })
+      this.times = newTimes
+      // 把 user 存起來給下拉選單用
+      for (const prop in users) {
+        this.users.push(prop)
+        this.userOptions.push({ label: prop, value: prop })
+      }
+
+      return parsedData
     },
     userOnChange (user) {
       d3.select('.chart').selectAll('*').remove()
@@ -129,17 +176,43 @@ export default {
       this.maxStartDate = ''
       this.startDate = ''
       this.comparisonDate = ''
+      this.isGranularitySelectDisabled = true
       this.isStartDateSelectDisabled = true
 
-      const userData = this.dataset.filter((item) => item[1] === user)
-      const result = this.accumulateBpsPerDate(userData)
+      // const userData = this.dataset.filter((item) => item[1] === user)
+      // const result = this.accumulateBpsPerDate(userData)
+      const aggregatedData = this.aggregate(this.dataset, 'users')
+      const transferredData = this.transfer(aggregatedData, 'users', this.granularity)
+      // console.log('result: ', result)
+      console.log('aggregatedData: ', aggregatedData)
+      console.log('transferredData: ', transferredData)
+      const selectedData = transferredData.map((date) => {
+        const targetUserIndex = this.users.indexOf(user)
+        return [date[date.length - 1], date[targetUserIndex]]
+      })
+      const result = selectedData
+      console.log('selectedData: ', selectedData)
+      this.aggregatedData = aggregatedData
       this.userBpsPerDate = result
 
       const dates = result.map((item) => item[0])
       this.defaulteStartDate = dates[0]
       this.minStartDate = dates[0]
       this.maxStartDate = dates[dates.length - 1]
+      this.isGranularitySelectDisabled = false
       this.isStartDateSelectDisabled = false
+    },
+    granularityOnChange () {
+      const newTimes = [this.times[0]]
+      // note: 可能可以改用 this.times.filter
+      this.allTimes.forEach((time, index) => {
+        if (new Date(time) - new Date(newTimes[newTimes.length - 1]) >= this.granularity * 60 * 1000) {
+          newTimes.push(time)
+        }
+      })
+      this.times = newTimes
+      const transferredData = this.transfer(this.aggregatedData, 'users', this.granularity)
+      console.log('transferredData: ', transferredData)
     },
     accumulateBpsPerDate (data) {
       const dateBps = {}
@@ -155,11 +228,65 @@ export default {
         })
       return Object.entries(dateBps)
     },
+    aggregate (parsedData, type) {
+      let aggregatedData = {}
+      let targetTypeIndex = 0
+      switch (type) {
+        case 'users':
+          targetTypeIndex = 1
+          break
+        case 'nations':
+          targetTypeIndex = 3
+          break
+        case 'otts':
+          targetTypeIndex = 4
+          break
+      }
+
+      parsedData.forEach((item) => {
+        // 找出 time，沒有就 push 新增一個，已經有存了就直接放進去原本的
+        if (aggregatedData[item[0]]) {
+          // 根據下拉選單選定的 type 找到該欄位，找不到就 push 新增一個，已經有存了就直接跟原本的加起來
+          if (aggregatedData[item[0]][item[targetTypeIndex]]) {
+            aggregatedData[item[0]][item[targetTypeIndex]] += Number(item[5])
+          } else {
+            aggregatedData[item[0]][item[targetTypeIndex]] = Number(item[5])
+          }
+        } else {
+          aggregatedData[item[0]] = { [item[targetTypeIndex]]: Number(item[5]) }
+        }
+      })
+      return aggregatedData
+    },
+    transfer (aggregatedData, type, granularity) {
+      const transferredData = []
+      let count = 0
+      let newRow = Array(this[type].length).fill(0)
+      Object.entries(aggregatedData).forEach((row, index) => {
+        // 建立一個只放 bps 的 array
+        if (new Date(row[0]) - new Date(this.times[count]) >= granularity * 60 * 1000) {
+          // 把 X 軸的 label 放進去做二維 table
+          newRow.push(this.times[count])
+          transferredData.push(newRow)
+          newRow = Array(this[type].length).fill(0)
+          count++
+        }
+        for (const field in row[1]) {
+          const fieldIndex = this[type].indexOf(field)
+          newRow[fieldIndex] += row[1][field]
+        }
+        if (index === this.allTimes.length - 1) {
+          newRow.push(this.times[count])
+          transferredData.push(newRow)
+        }
+      })
+      return transferredData
+    },
     startDateOnChange (value) {
       d3.select('.chart').selectAll('*').remove()
 
       const date = value.slice(0, 10)
-      const startIndex = this.userBpsPerDate.findIndex((item) => item[0] === date)
+      const startIndex = this.userBpsPerDate.findIndex((item) => item[0].slice(0, 10) === date)
       const selectedDates = this.userBpsPerDate.slice(startIndex, startIndex + weekDays)
       this.baseDates = selectedDates
 
@@ -198,8 +325,14 @@ export default {
 
       const padData = (data, pushOrUnshift) => {
         const paddedData = data.slice()
-        for (let i = paddedData.length; paddedData.length < weekDays; i++) {
-          paddedData[pushOrUnshift]([`null${i}`, min])
+        // 相當之醜
+        for (let i = pushOrUnshift === 'push' ? paddedData.length - 1 : 0; paddedData.length < weekDays; pushOrUnshift === 'push' ? i++ : '') {
+          paddedData[pushOrUnshift]([
+            pushOrUnshift === 'push'
+              ? new Date(new Date(paddedData[i][0]).getTime() + 86400000).toISOString().slice(0, 10)
+              : new Date(new Date(paddedData[i][0]).getTime() - 86400000).toISOString().slice(0, 10),
+            min
+          ])
         }
         return paddedData
       }
@@ -209,7 +342,7 @@ export default {
       const growthRates = paddedBaseDates.map((item, index) => [
         item[0],
         paddedComparisonDates[index][1] === min // 檢查上週數據是否為最小值
-          ? 999 // 成長率是無限的話，先設為 999
+          ? 0 // 成長率是無限的話，先設為 0
           : item[1] === min // 上週數據不是最小值，檢查這週數據是否為最小值
             ? Math.round(((0 - paddedComparisonDates[index][1]) / paddedComparisonDates[index][1]) * 100) // 這週數據是最小值，用 0 計算成長率(其實成長率就是 -100%)
             : Math.round(((item[1] - paddedComparisonDates[index][1]) / paddedComparisonDates[index][1]) * 100) // 這週數據不是最小值，計算成長率
