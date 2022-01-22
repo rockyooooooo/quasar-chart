@@ -179,21 +179,24 @@ export default {
       this.isGranularitySelectDisabled = true
       this.isStartDateSelectDisabled = true
 
-      // const userData = this.dataset.filter((item) => item[1] === user)
-      // const result = this.accumulateBpsPerDate(userData)
-      const aggregatedData = this.aggregate(this.dataset, 'users')
-      const transferredData = this.transfer(aggregatedData, 'users', this.granularity)
+      const userData = this.dataset.filter((item) => item[1] === user)
+      const result = this.accumulateBpsPerDate(userData)
+      // const aggregatedData = this.aggregate(this.dataset, 'users')
+      // const transferredData = this.transfer(aggregatedData, 'users', this.granularity)
       // console.log('result: ', result)
-      console.log('aggregatedData: ', aggregatedData)
-      console.log('transferredData: ', transferredData)
-      const selectedData = transferredData.map((date) => {
-        const targetUserIndex = this.users.indexOf(user)
-        return [date[date.length - 1], date[targetUserIndex]]
-      })
-      const result = selectedData
-      console.log('selectedData: ', selectedData)
-      this.aggregatedData = aggregatedData
+      // console.log('aggregatedData: ', aggregatedData)
+      // console.log('transferredData: ', transferredData)
+      // const selectedData = transferredData.map((date) => {
+      //   const targetUserIndex = this.users.indexOf(user)
+      //   return [date[date.length - 1], date[targetUserIndex]]
+      // })
+      // const result = selectedData
+      // console.log('selectedData: ', selectedData)
+      // this.aggregatedData = aggregatedData
       this.userBpsPerDate = result
+      console.log('dataset: ', this.dataset)
+      console.log('userData: ', userData)
+      console.log('userBpsPerDate: ', result)
 
       const dates = result.map((item) => item[0])
       this.defaulteStartDate = dates[0]

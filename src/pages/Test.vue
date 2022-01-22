@@ -44,7 +44,7 @@ export default {
       aggregatedData: [],
       user: '',
       userOptions: [],
-      granularity: 5,
+      granularity: 30,
       granularityOptions: [
         { label: '5 mins', value: 5 },
         { label: '30 mins', value: 30 },
@@ -65,8 +65,8 @@ export default {
       const reader = new FileReader()
 
       reader.onload = (evt) => {
-        this.firstTier = 'times'
-        this.secondTier = 'users'
+        this.firstTier = 'users'
+        this.secondTier = 'times'
         const inputData = evt.target.result
 
         console.time('parse data')
@@ -93,8 +93,10 @@ export default {
           const granulatedData = this.granulateTransferredData(secondTransferredData, this.granularity)
           const aggregatedData = this.aggregate(granulatedData)
           const dataForTable = this.transferForTable(aggregatedData)
+          this.aggregatedData = aggregatedData
 
           console.log('granulatedData: ', granulatedData)
+          console.log('aggregatedData: ', aggregatedData)
           console.log('dataForTable: ', dataForTable)
         }
         if (this.secondTier === 'times') {
@@ -102,7 +104,9 @@ export default {
           const aggregatedData = this.aggregate(secondTransferredData)
           const granulatedData = this.granulateAggregatedData(aggregatedData, this.granularity)
           const dataForTable = this.transferForTable(granulatedData)
+          this.aggregatedData = granulatedData
 
+          console.log('aggregatedData: ', aggregatedData)
           console.log('granulatedData: ', granulatedData)
           console.log('dataForTable: ', dataForTable)
         }
@@ -274,6 +278,8 @@ export default {
     },
     // times 在 second tier，在 aggregate 後做 granulate
     granulateAggregatedData (aggregatedData, granularity) {
+      console.log('=========granulateAggregatedData!=========')
+      console.log(aggregatedData)
       return aggregatedData.map((firstTierBucket) => {
         // 宣告一個存放 second tier bucket 的 array
         const arr = this.times.map((time) => [time, 0])

@@ -135,6 +135,7 @@ export default {
         console.time('parse data')
         const parsedData = this.parseData(inputData)
         console.timeEnd('parse data')
+        console.log('parsedData: ', parsedData)
 
         this.dataset = parsedData
         this.datasetForTable = parsedData
@@ -241,9 +242,9 @@ export default {
 
       this.generateColumns()
       const aggregatedData = this.aggregate(this.dataset, this.type)
-      console.log(aggregatedData)
+      console.log('aggregatedData: ', aggregatedData)
       const transferredData = this.transfer(aggregatedData, this.type, this.granularity)
-      console.log(transferredData)
+      console.log('transferredData: ', transferredData)
       this.aggregatedData = aggregatedData
       this.datasetForTable = transferredData
       this.isGranularitySelectDisabled = false
