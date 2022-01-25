@@ -1,27 +1,35 @@
 <template>
   <div style="width: 500px; max-width: 90vw;">
-    <p class="caption">Single File Upload</p>
+    <p class="caption">
+      Single File Upload
+    </p>
     <q-uploader
       :multiple="false"
       :url="''"
       :upload-factory="uploadFile"
       @uploaded="uploaded"
     />
-    <p class="caption">User</p>
+    <p class="caption">
+      User
+    </p>
     <q-select
       v-model="user"
       :options="userOptions"
       :disable="isUserSelectDisabled"
       @input="userOnChange"
     />
-    <p class="caption">Granularity</p>
+    <p class="caption">
+      Granularity
+    </p>
     <q-select
       v-model="granularity"
       :options="granularities"
       :disable="isGranularitySelectDisabled"
       @input="granularityOnChange"
     />
-    <p class="caption">Start date</p>
+    <p class="caption">
+      Start date
+    </p>
     <q-datetime
       v-model="startDate"
       type="date"
@@ -31,7 +39,9 @@
       :max="maxStartDate"
       @change="startDateOnChange"
     />
-    <p class="caption">Comparison date</p>
+    <p class="caption">
+      Comparison date
+    </p>
     <q-select
       v-model="comparisonDate"
       :options="comparisonDates"
@@ -39,7 +49,7 @@
       @input="comparisonDateOnChange"
     />
     <div class="chart-container">
-      <svg class="chart"></svg>
+      <svg class="chart" />
     </div>
   </div>
 </template>
