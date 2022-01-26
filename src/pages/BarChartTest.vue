@@ -9,26 +9,20 @@
       :upload-factory="uploadFile"
       @uploaded="uploaded"
     />
-    <p class="caption">
-      Granularity
-    </p>
+    <p class="caption">Granularity</p>
     <q-select
       v-model="granularity"
       :options="granularityOptions"
       :disable="isGranularitySelectDisabled"
     />
-    <p class="caption">
-      User
-    </p>
+    <p class="caption">User</p>
     <q-select
       id="user"
       v-model="user"
       :options="userOptions"
       :disable="isUserSelectDisabled"
     />
-    <p class="caption">
-      Base date
-    </p>
+    <p class="caption">Base date</p>
     <q-datetime
       v-model="baseTime"
       type="date"
@@ -37,9 +31,7 @@
       :max="maxBaseTime"
       :disable="isBaseTimeSelectDisabled"
     />
-    <p class="caption">
-      Comparison date
-    </p>
+    <p class="caption">Comparison date</p>
     <q-select
       v-model="comparisonTime"
       :options="validComparisonTimes"
@@ -60,6 +52,7 @@
 
 <script>
 import * as d3 from 'd3'
+import { mixin } from './mixin'
 
 const weekDays = 7
 
@@ -245,6 +238,7 @@ export default {
       this.renderBarChart(this.baseTimes, this.comparisonTimes)
     }
   },
+  mixins: [mixin],
   methods: {
     uploadFile (file, updateProgress) {
       return new Promise((resolve, reject) => {
@@ -260,8 +254,7 @@ export default {
         this.users = []
         this.userOptions = []
 
-        const inputData = evt.target.result
-        this.inputData = inputData
+        this.inputData = evt.target.result
 
         this.isGranularitySelectDisabled = false
         this.isUserSelectDisabled = false
@@ -324,99 +317,6 @@ export default {
     },
     /**
      * 描述
-     * @param {array} data - The parsedData.
-     * @param {string} type
-     * @returns {object}
-     */
-    transfer (data, type) {
-      const transferredData = {}
-      let typeIndex = 0
-      switch (type) {
-        case 'times':
-          typeIndex = 0
-          break
-        case 'users':
-          typeIndex = 1
-          break
-        case 'nations':
-          typeIndex = 3
-          break
-        case 'otts':
-          typeIndex = 4
-          break
-      }
-
-      data.forEach((record) => {
-        if (transferredData[record[typeIndex]]) {
-          transferredData[record[typeIndex]].push(record)
-        } else {
-          transferredData[record[typeIndex]] = [record]
-        }
-      })
-
-      return transferredData
-    },
-    /**
-     * 描述
-     * @param {object} transferredData - Transferred twice Data.
-     * @returns {array}
-     */
-    aggregate (transferredData) {
-      return Object.entries(transferredData)
-        .map((firstTierBucket) => ([
-          firstTierBucket[0],
-          Object.entries(firstTierBucket[1])
-            .map((secondTierBucket) => ([
-              secondTierBucket[0],
-              secondTierBucket[1].reduce((acc, cur) => {
-                return acc + Number(cur[cur.length - 1])
-              }, 0)
-            ]))
-        ]))
-    },
-    /**
-     * 描述
-     * @param {array} aggregatedData - The aggregatedData.
-     * @param {number} granularity - The user-selected granularity.
-     * @returns {array}
-     */
-    granulateAggregatedData (aggregatedData, granularity) {
-      return aggregatedData.map((firstTierBucket) => {
-        // 宣告一個存放 second tier bucket 的 array
-        const arr = this.times.map((time) => [time, 0])
-        let index = 0
-
-        return [
-          firstTierBucket[0],
-          firstTierBucket[1].reduce((acc, secondTierBucket) => {
-            let timeGap = new Date(secondTierBucket[0]) - new Date(arr[index][0])
-            // 當 timeGap 大等於 granularity 時就把 index + 1，並更新 timeGap，直到 timeGap 小於 granularity
-            while (timeGap >= granularity * 60 * 1000) {
-              timeGap = new Date(secondTierBucket[0]) - new Date(arr[++index][0])
-            }
-            arr[index][1] += secondTierBucket[1]
-            return arr
-          }, arr)
-        ]
-      })
-    },
-    /**
-     * 描述
-     * @param {array} times - All value of the time field of the parsedData.
-     * @param {number} granularity - The user-selected granularity.
-     * @returns {array}
-     */
-    granulateTimes (times, granularity) {
-      const newTimes = [times[0]]
-      times.forEach((time) => {
-        if (new Date(time) - new Date(newTimes[newTimes.length - 1]) === granularity * 60 * 1000) {
-          newTimes.push(time)
-        }
-      })
-      return newTimes
-    },
-    /**
-     * 描述
      * @param {array} baseTimes - Bps per selected granularity of the base times.
      * @param {array} comparisonTimes - Bps per selected granularity of the comparison times.
      */
@@ -465,9 +365,9 @@ export default {
       }
 
       const paddedBaseTimes = padData(baseTimes, 'push', this.granularity, this.range)
-      const paddedComparisonTimes = padData(comparisonTimes, 'unshift', this.granularity, weekDays)
-      const paddedBaseDates = padDates(this.baseDates, 'push', 60 * 24)
-      const paddedComparisonDates = padDates(this.comparisonDates, 'unshift', 60 * 24)
+      const paddedComparisonTimes = padData(comparisonTimes, 'unshift', this.granularity, this.range)
+      const paddedBaseDates = padDates(this.baseDates, 'push', 60 * 24, weekDays)
+      const paddedComparisonDates = padDates(this.comparisonDates, 'unshift', 60 * 24, weekDays)
       console.log('paddedBaseTimes: ', paddedBaseTimes)
       console.log('paddedComparisonTimes: ', paddedComparisonTimes)
       const growthRates = paddedBaseTimes.map((item, index) => [
