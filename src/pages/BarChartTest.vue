@@ -44,6 +44,9 @@
 </template>
 
 <style>
+.chart-container {
+  position: relative;
+}
 .chart {
   overflow: visible !important;
   margin: 8rem 0;
@@ -52,6 +55,7 @@
 
 <script>
 import * as d3 from 'd3'
+import moment from 'moment'
 import { mixin } from './mixin'
 
 const weekDays = 7
@@ -342,8 +346,8 @@ export default {
         for (let i = pushOrUnshift === 'push' ? paddedData.length - 1 : 0; paddedData.length < length; pushOrUnshift === 'push' ? i++ : '') {
           paddedData[pushOrUnshift]([
             pushOrUnshift === 'push'
-              ? new Date(new Date(paddedData[i][0]).getTime() + (granularity * 60 * 1000)).toISOString()
-              : new Date(new Date(paddedData[i][0]).getTime() - (granularity * 60 * 1000)).toISOString(),
+              ? moment(new Date(paddedData[i][0]).getTime() + (granularity * 60 * 1000)).format('YYYY-MM-DD HH:mm:ss')
+              : moment(new Date(paddedData[i][0]).getTime() - (granularity * 60 * 1000)).format('YYYY-MM-DD HH:mm:ss'),
             min
           ])
         }
@@ -357,8 +361,8 @@ export default {
         for (let i = pushOrUnshift === 'push' ? paddedDates.length - 1 : 0; paddedDates.length < length; pushOrUnshift === 'push' ? i++ : '') {
           paddedDates[pushOrUnshift](
             pushOrUnshift === 'push'
-              ? new Date(new Date(paddedDates[i]).getTime() + (granularity * 60 * 1000)).toISOString().slice(0, 10)
-              : new Date(new Date(paddedDates[i]).getTime() - (granularity * 60 * 1000)).toISOString().slice(0, 10)
+              ? moment(new Date(paddedDates[i]).getTime() + (granularity * 60 * 1000)).format('YYYY-MM-DD')
+              : moment(new Date(paddedDates[i]).getTime() - (granularity * 60 * 1000)).format('YYYY-MM-DD')
           )
         }
         return paddedDates
@@ -423,22 +427,20 @@ export default {
       const rateYAxis = d3.axisRight(rateYLinear)
         .tickFormat((d) => d + '%')
 
+      // axis scale
       chart.append('g')
         .attr('transform', `translate(0, ${chartHeight})`)
         .call(xAxis)
         .selectAll('text')
-        // .attr('transform', 'translate(-6, 0)rotate(-45)')
-        // .style('text-anchor', 'end')
       chart.append('g')
         .call(comparisonXAxis)
         .selectAll('text')
-        // .attr('transform', `translate(6, 0)rotate(-45)`)
-        // .style('text-anchor', 'start')
       chart.append('g').call(yAxis)
       chart.append('g')
         .attr('transform', `translate(${chartWidth}, 0)`)
         .call(rateYAxis)
 
+      // bars
       const interval = ((chartWidth - (paddedBaseTimes.length * barWidth)) / (paddedBaseTimes.length))
       chart.selectAll('rect')
         .data(paddedBaseTimes.map((item) => item[1]))
@@ -451,6 +453,7 @@ export default {
         .attr('fill', '#5F4B8B')
         .attr('class', 'bars')
 
+      // line
       chart.append('path')
         .datum(growthRates.map((item) => item[1]))
         .attr('fill', 'none')
@@ -462,21 +465,153 @@ export default {
         )
         .attr('class', 'line')
 
-      // =======================try tooltip======================
+      // tooltip
+      const xFullLinear = d3.scaleBand()
+        .domain(paddedBaseTimes.map((item) => item[0]))
+        .range([0, chartWidth])
 
-      // const tooltip = d3.select('.chart-container')
-      //   .append('div')
-      //   .attr('id', 'tooltip')
-      //   .style('position', 'absolute')
-      //   .style('visibility', 'hidden')
-      //   .style('background-color', '#d3d3d3')
-      //   .text("I'm a circle!")
+      // custom invert function, reference: https://bl.ocks.org/shimizu/808e0f5cadb6a63f28bb00082dc8fe3f
+      xFullLinear.invert = (function () {
+        const domain = xFullLinear.domain()
+        const range = xFullLinear.range()
+        const scale = d3.scaleQuantize().domain(range).range(domain)
+        return function (x) {
+          return scale(x)
+        }
+      })()
 
-      // chart.on('mouseover', () => tooltip.style('visibility', 'visible'))
-      //   .on('mousemove', () => tooltip.style('top', (event.pageY - 80) + 'px').style('left', (event.pageX + 20) + 'px'))
-      //   .on('mouseout', () => tooltip.style('visibility', 'hidden'))
+      const guideLine = chart.append('line')
+        .attr('class', 'guideLine')
+        .attr('x1', 0)
+        .attr('y1', 0)
+        .attr('x2', 0)
+        .attr('y2', chartHeight)
+        .attr('stroke', 'red')
+      const tooltipCircle = chart
+        .append('g')
+        .append('circle')
+        .style('fill', 'none')
+        .attr('stroke', 'black')
+        .attr('r', 4)
+        .style('opacity', 0)
+      const focusTexts = chart
+        .append('g')
+        .style('opacity', 0)
+        .style('fill', 'black')
+        .style('font-size', '0.8rem')
+        .attr('text-anchor', 'left')
+        .attr('alignment-baseline', 'middle')
+      const tooltipHeight = 15 * 6 + 16
+      const tooltipBackground = focusTexts.append('rect')
+        .attr('width', 180)
+        .attr('height', tooltipHeight)
+        .style('fill', 'rgba(255, 255, 255, 0.95)')
+        .style('stroke', '#d9d9d9')
+        .style('filter', 'url(#shadow)')
+        .attr('rx', 3)
+        .attr('ry', 3)
+      focusTexts.append('text')
+        .attr('class', 'comparison-date-label')
+        .style('fill', '#808080')
+      focusTexts.append('text')
+        .attr('class', 'comparison-date-value')
+      focusTexts.append('text')
+        .attr('class', 'base-date-label')
+        .style('fill', '#808080')
+      focusTexts.append('text')
+        .attr('class', 'base-date-value')
+      focusTexts.append('text')
+        .attr('class', 'growth-rate-label')
+        .style('fill', '#808080')
+      focusTexts.append('text')
+        .attr('class', 'growth-rate-value')
+      chart.append('rect')
+        .style('fill', 'none')
+        .style('pointer-events', 'all')
+        .attr('width', chartWidth)
+        .attr('height', chartHeight)
+        .on('mouseover', mouseover)
+        .on('mousemove', mousemove)
+        .on('mouseout', mouseout)
+      chart.append('defs')
+        .append('filter')
+        .attr('id', 'shadow')
+        .append('feDropShadow')
+        .attr('dx', 2)
+        .attr('dy', 2)
+        .attr('stdDeviation', 4)
+        .attr('flood-color', 'rgb(0 0 0 / 10%)')
 
-      // ===========================================================
+      function mouseover () {
+        tooltipCircle.style('opacity', 1)
+        focusTexts.style('opacity', 1)
+        guideLine.style('opacity', '1')
+      }
+
+      function mousemove () {
+        // get mouse coordinate
+        const xy = d3.mouse(chart.node())
+        // get nearest X axis scale
+        const d = xFullLinear.invert(xy[0])
+        // get nearest X axis scale x coordinate
+        const nx = xFullLinear(d) + (xFullLinear.bandwidth() / 2)
+        // get nearest Y axis scale y coordinate
+        const index = growthRates.findIndex((item) => item[0] === d)
+        const ny = rateYLinear(growthRates[index][1])
+
+        guideLine
+          .attr('x1', nx)
+          .attr('x2', nx)
+        tooltipCircle
+          .attr('cx', nx)
+          .attr('cy', ny)
+        focusTexts.select('.comparison-date-label')
+          .html('Comparison Date:')
+          .transition()
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny - 37)
+        focusTexts.select('.comparison-date-value')
+          .html(paddedComparisonTimes[index][0])
+          .transition()
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny - 22)
+        focusTexts.select('.base-date-label')
+          .html('Base Date:')
+          .transition()
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny - 7)
+        focusTexts.select('.base-date-value')
+          .html(growthRates[index][0])
+          .transition()
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny + 7)
+        focusTexts.select('.growth-rate-label')
+          .html('Growth Rate:')
+          .transition()
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny + 22)
+        focusTexts.select('.growth-rate-value')
+          .html(`${growthRates[index][1]}%`)
+          .transition()
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny + 37)
+        tooltipBackground
+          .transition()
+          .duration(100)
+          .attr('x', nx + 15)
+          .attr('y', ny - (tooltipHeight / 2) - 5)
+      }
+      function mouseout () {
+        tooltipCircle.style('opacity', 0)
+        focusTexts.style('opacity', 0)
+        guideLine.style('opacity', '0')
+      }
     }
   }
 }
