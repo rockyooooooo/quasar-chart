@@ -137,6 +137,7 @@ export default {
     },
     validComparisonTimes () {
       const validComparisonTimes = []
+      if (this.baseDateIndex === 0) return validComparisonTimes
       for (let i = this.baseTimeIndex - this.range; i + this.range > 0; i -= this.range) {
         const endIndex = i + this.range - 1
         if (i < 0) i = 0
@@ -164,56 +165,11 @@ export default {
     }
   },
   watch: {
-    parsedData (value) {
-      console.log('new parsedData: ', value)
-    },
-    dates (value) {
-      console.log('new dates: ', value)
-    },
-    minBaseTime (value) {
-      console.log('new minBaseTime: ', value)
-    },
-    maxBaseTime (value) {
-      console.log('new maxBaseTime: ', value)
-    },
-    aggregatedData (value) {
-      console.log('new aggregatedData: ', value)
-    },
-    granulatedData (value) {
-      console.log('new granulatedData: ', value)
-    },
-    userData (value) {
-      console.log('new userData: ', value)
-    },
-    times (value) {
-      console.log('new times: ', value)
-    },
-    range (value) {
-      console.log('new range: ', value)
-    },
-    baseDates (value) {
-      console.log('new baseDates: ', value)
-    },
-    baseTimeIndex (value) {
-      console.log('new baseTimeIndex: ', value)
-    },
-    baseTimes (value) {
-      console.log('new baseTimes: ', value)
-    },
-    comparisonDates (value) {
-      console.log('new comparisonDates: ', value)
-    },
     validComparisonTimes (value) {
-      console.log('new validComparisonTimes: ', value)
-
-      if (!this.comparisonTime.length) return
+      if (!this.comparisonTime.length || !this.validComparisonTimes.length) return
       this.comparisonTime = this.validComparisonTimes.find((item) => item.value[0] === this.comparisonTime[0]).value
     },
-    comparisonTimes (value) {
-      console.log('new comparisonTimes: ', value)
-    },
     granularity (value) {
-      console.log('new granularity: ', value)
       d3.select('.chart').selectAll('*').remove()
 
       if (!this.comparisonTime.length) return
@@ -223,7 +179,6 @@ export default {
       this.renderBarChart(this.baseTimes, this.comparisonTimes)
     },
     user (value) {
-      console.log('new user: ', value)
       d3.select('.chart').selectAll('*').remove()
       this.isBaseTimeSelectDisabled = false
 
@@ -231,13 +186,10 @@ export default {
       this.renderBarChart(this.baseTimes, this.comparisonTimes)
     },
     baseTime (value) {
-      console.log('new base time: ', value)
       d3.select('.chart').selectAll('*').remove()
       this.isComparisonTimesSelectDisabled = false
     },
     comparisonTime (value) {
-      console.log('new comparison time: ', value)
-
       if (!value.length) return
       this.renderBarChart(this.baseTimes, this.comparisonTimes)
     }
@@ -372,8 +324,6 @@ export default {
       const paddedComparisonTimes = padData(comparisonTimes, 'unshift', this.granularity, this.range)
       const paddedBaseDates = padDates(this.baseDates, 'push', 60 * 24, weekDays)
       const paddedComparisonDates = padDates(this.comparisonDates, 'unshift', 60 * 24, weekDays)
-      console.log('paddedBaseTimes: ', paddedBaseTimes)
-      console.log('paddedComparisonTimes: ', paddedComparisonTimes)
       const growthRates = paddedBaseTimes.map((item, index) => [
         item[0],
         paddedComparisonTimes[index][1] === min // 檢查上週數據是否為最小值
@@ -382,34 +332,28 @@ export default {
             ? -100 // 這週數據是最小值，用 0 計算成長率(其實成長率就是 -100%)
             : Math.round(((item[1] - paddedComparisonTimes[index][1]) / paddedComparisonTimes[index][1]) * 100) // 這週數據不是最小值，計算成長率
       ])
-      console.log({ growthRates, paddedBaseTimes, paddedComparisonTimes, min })
 
-      const xLinear = d3.scaleBand()
-        // .domain(paddedBaseTimes.map((item) => item[0]))
-        .domain(paddedBaseDates)
-        .range([0, chartWidth])
-
-      const comparisonXLinear = d3.scaleBand()
-        // .domain(paddedComparisonTimes.map((item) => item[0]))
-        .domain(paddedComparisonDates)
-        .range([0, chartWidth])
-
-      const yLinear = d3.scaleLinear()
-        .domain([min, max])
-        .range([0, chartHeight])
-
-      const reverseYLinear = d3.scaleLinear()
-        .domain([max, min])
-        .range([0, chartHeight])
-
-      const rateYLinear = d3.scaleLinear()
-        .domain([d3.max([100, ...growthRates.map((item) => item[1])]), -100])
-        // .domain([d3.max(growthRates.map((item) => item[1])), d3.min(growthRates.map((item) => item[1]))])
-        .range([0, chartHeight])
-
+      // the SVG
       const chart = d3.select('.chart')
         .attr('width', chartWidth)
         .attr('height', chartHeight)
+
+      // prepare for axes
+      const xLinear = d3.scaleBand()
+        .domain(paddedBaseDates)
+        .range([0, chartWidth])
+      const comparisonXLinear = d3.scaleBand()
+        .domain(paddedComparisonDates)
+        .range([0, chartWidth])
+      const yLinear = d3.scaleLinear()
+        .domain([min, max])
+        .range([0, chartHeight])
+      const reverseYLinear = d3.scaleLinear()
+        .domain([max, min])
+        .range([0, chartHeight])
+      const rateYLinear = d3.scaleLinear()
+        .domain([d3.max([100, ...growthRates.map((item) => item[1])]), -100])
+        .range([0, chartHeight])
 
       const xAxis = d3.axisBottom(xLinear)
       const comparisonXAxis = d3.axisTop(comparisonXLinear)
@@ -427,7 +371,7 @@ export default {
       const rateYAxis = d3.axisRight(rateYLinear)
         .tickFormat((d) => d + '%')
 
-      // axis scale
+      // draw axes
       chart.append('g')
         .attr('transform', `translate(0, ${chartHeight})`)
         .call(xAxis)
@@ -435,12 +379,13 @@ export default {
       chart.append('g')
         .call(comparisonXAxis)
         .selectAll('text')
-      chart.append('g').call(yAxis)
+      chart.append('g')
+        .call(yAxis)
       chart.append('g')
         .attr('transform', `translate(${chartWidth}, 0)`)
         .call(rateYAxis)
 
-      // bars
+      // draw bars
       const interval = ((chartWidth - (paddedBaseTimes.length * barWidth)) / (paddedBaseTimes.length))
       chart.selectAll('rect')
         .data(paddedBaseTimes.map((item) => item[1]))
@@ -453,7 +398,7 @@ export default {
         .attr('fill', '#5F4B8B')
         .attr('class', 'bars')
 
-      // line
+      // draw line
       chart.append('path')
         .datum(growthRates.map((item) => item[1]))
         .attr('fill', 'none')
@@ -465,7 +410,7 @@ export default {
         )
         .attr('class', 'line')
 
-      // tooltip
+      // draw tooltip
       const xFullLinear = d3.scaleBand()
         .domain(paddedBaseTimes.map((item) => item[0]))
         .range([0, chartWidth])
