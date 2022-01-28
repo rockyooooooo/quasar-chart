@@ -17,7 +17,6 @@
     />
     <p class="caption">User</p>
     <q-select
-      id="user"
       v-model="user"
       :options="userOptions"
       :disable="isUserSelectDisabled"
@@ -26,6 +25,7 @@
     <q-datetime
       v-model="baseTime"
       type="date"
+      :display-value="baseTimeDisplayValue"
       :default-value="minBaseTime"
       :min="minBaseTime"
       :max="maxBaseTime"
@@ -43,22 +43,12 @@
   </div>
 </template>
 
-<style>
-.chart-container {
-  position: relative;
-}
-.chart {
-  overflow: visible !important;
-  margin: 8rem 0;
-}
-</style>
-
 <script>
 import * as d3 from 'd3'
 import moment from 'moment'
 import { mixin } from './mixin'
 
-const weekDays = 7
+const WEEKDAYS = 7
 
 export default {
   name: 'BarChart',
@@ -94,6 +84,13 @@ export default {
     allDates () {
       return this.getAllDates(this.allTimes)
     },
+    partitionsPerDay () {
+      return 1440 / this.granularity
+    },
+    baseTimeDisplayValue () {
+      if (!this.baseTime) return ''
+      return `${moment(this.baseTime).format('YYYY-MM-DD')} ~ ${moment(this.baseTime).add(6, 'd').format('YYYY-MM-DD')}`
+    },
     minBaseTime () {
       return this.allDates[0]
     },
@@ -122,11 +119,11 @@ export default {
       return this.granulateTimes(this.allTimes, this.granularity)
     },
     range () {
-      return ((86400000 / (this.granularity * 60 * 1000))) * weekDays
+      return this.partitionsPerDay * WEEKDAYS
     },
     baseDates () {
       const baseDateIndex = this.allDates.indexOf(this.baseTime.slice(0, 10))
-      return this.allDates.slice(baseDateIndex, baseDateIndex + weekDays)
+      return this.allDates.slice(baseDateIndex, baseDateIndex + WEEKDAYS)
     },
     baseTimeIndex () {
       const baseTime = this.baseTime.slice(0, 10)
@@ -167,13 +164,17 @@ export default {
   watch: {
     validComparisonTimes (value) {
       if (!this.comparisonTime.length || !this.validComparisonTimes.length) return
-      this.comparisonTime = this.validComparisonTimes.find((item) => item.value[0] === this.comparisonTime[0]).value
+      const emptyData = { label: '', value: [] }
+      const foundComparisonTime = this.validComparisonTimes.find((item) => item.value[0] === this.comparisonTime[0]) || emptyData
+      this.comparisonTime = foundComparisonTime.value
     },
     granularity (value) {
       d3.select('.chart').selectAll('*').remove()
 
       if (!this.comparisonTime.length) return
-      this.comparisonTime = this.validComparisonTimes.find((item) => item.value[0] === this.comparisonTime[0]).value
+      const emptyData = { label: '', value: [] }
+      const foundComparisonTime = this.validComparisonTimes.find((item) => item.value[0] === this.comparisonTime[0]) || emptyData
+      this.comparisonTime = foundComparisonTime.value
 
       if (!value || !this.user || !this.baseTime || !this.comparisonTimes.length) return
       this.renderBarChart(this.baseTimes, this.comparisonTimes)
@@ -279,9 +280,15 @@ export default {
     renderBarChart (baseTimes, comparisonTimes) {
       d3.select('.chart').selectAll('*').remove()
 
-      const chartWidth = 800
-      const chartHeight = 500
-      const barWidth = 50 / (86400000 / (this.granularity * 60 * 1000))
+      const margin = {
+        top: 50,
+        right: 40,
+        bottom: 50,
+        left: 40
+      }
+      const chartWidth = 880 - margin.left - margin.right
+      const chartHeight = 600 - margin.top - margin.bottom
+      const barWidth = 50 / this.partitionsPerDay
 
       const bpsArr = baseTimes.map((item) => item[1])
       const comparisonBpsArr = comparisonTimes.map((item) => item[1])
@@ -322,8 +329,8 @@ export default {
 
       const paddedBaseTimes = padData(baseTimes, 'push', this.granularity, this.range)
       const paddedComparisonTimes = padData(comparisonTimes, 'unshift', this.granularity, this.range)
-      const paddedBaseDates = padDates(this.baseDates, 'push', 60 * 24, weekDays)
-      const paddedComparisonDates = padDates(this.comparisonDates, 'unshift', 60 * 24, weekDays)
+      const paddedBaseDates = padDates(this.baseDates, 'push', 60 * 24, WEEKDAYS)
+      const paddedComparisonDates = padDates(this.comparisonDates, 'unshift', 60 * 24, WEEKDAYS)
       const growthRates = paddedBaseTimes.map((item, index) => [
         item[0],
         paddedComparisonTimes[index][1] === min // 檢查上週數據是否為最小值
@@ -335,8 +342,11 @@ export default {
 
       // the SVG
       const chart = d3.select('.chart')
-        .attr('width', chartWidth)
-        .attr('height', chartHeight)
+        .attr('width', chartWidth + margin.left + margin.right)
+        .attr('height', chartHeight + margin.top + margin.bottom)
+        .attr('transform', `translate(-${margin.left})`)
+        .append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`)
 
       // prepare for axes
       const xLinear = d3.scaleBand()
@@ -511,43 +521,50 @@ export default {
           .attr('cx', nx)
           .attr('cy', ny)
         focusTexts.select('.comparison-date-label')
-          .html('Comparison Date:')
+          .html('Comparison Time:')
           .transition()
+          .ease(d3.easeLinear)
           .duration(100)
           .attr('x', nx + 15 + 18)
           .attr('y', ny - 37)
         focusTexts.select('.comparison-date-value')
           .html(paddedComparisonTimes[index][0])
           .transition()
+          .ease(d3.easeLinear)
           .duration(100)
           .attr('x', nx + 15 + 18)
           .attr('y', ny - 22)
         focusTexts.select('.base-date-label')
-          .html('Base Date:')
+          .html('Base Time:')
           .transition()
+          .ease(d3.easeLinear)
           .duration(100)
           .attr('x', nx + 15 + 18)
           .attr('y', ny - 7)
         focusTexts.select('.base-date-value')
           .html(growthRates[index][0])
           .transition()
+          .ease(d3.easeLinear)
           .duration(100)
           .attr('x', nx + 15 + 18)
           .attr('y', ny + 7)
         focusTexts.select('.growth-rate-label')
           .html('Growth Rate:')
           .transition()
+          .ease(d3.easeLinear)
           .duration(100)
           .attr('x', nx + 15 + 18)
           .attr('y', ny + 22)
         focusTexts.select('.growth-rate-value')
           .html(`${growthRates[index][1]}%`)
           .transition()
+          .ease(d3.easeLinear)
           .duration(100)
           .attr('x', nx + 15 + 18)
           .attr('y', ny + 37)
         tooltipBackground
           .transition()
+          .ease(d3.easeLinear)
           .duration(100)
           .attr('x', nx + 15)
           .attr('y', ny - (tooltipHeight / 2) - 5)
