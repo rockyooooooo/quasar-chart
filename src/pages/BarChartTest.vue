@@ -104,7 +104,7 @@ export default {
       for (const key in transferredData) {
         secondTransferredData[key] = this.transfer(transferredData[key], this.secondTier)
       }
-
+      console.log('secondTransferredData: ', secondTransferredData)
       return this.aggregate(secondTransferredData)
     },
     granulatedData () {
@@ -162,6 +162,9 @@ export default {
     }
   },
   watch: {
+    aggregatedData (value) {
+      console.log('aggregatedData: ', value)
+    },
     validComparisonTimes (value) {
       if (!this.comparisonTime.length || !this.validComparisonTimes.length) return
       const emptyData = { label: '', value: [] }
@@ -258,6 +261,7 @@ export default {
       }
       this.user = this.users[0]
 
+      console.log('parsedData: ', parsedData)
       return parsedData
     },
     /**
