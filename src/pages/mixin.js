@@ -32,7 +32,6 @@ export const mixin = {
         }
       })
 
-      console.log('transferredData: ', transferredData)
       return transferredData
     },
     /**

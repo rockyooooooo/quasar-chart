@@ -1,5 +1,5 @@
 <template>
-  <div style="width: 500px; max-width: 90vw;">
+  <div style="min-width: 500px; width: 90vw; max-width: 800px;">
     <p class="caption">
       Single File Upload
     </p>
@@ -9,44 +9,33 @@
       :upload-factory="uploadFile"
       @uploaded="uploaded"
     />
-    <p class="caption">
-      User
-    </p>
+    <p class="caption">Granularity</p>
+    <q-select
+      v-model="granularity"
+      :options="granularityOptions"
+      :disable="isGranularitySelectDisabled"
+    />
+    <p class="caption">User</p>
     <q-select
       v-model="user"
       :options="userOptions"
       :disable="isUserSelectDisabled"
-      @input="userOnChange"
     />
-    <p class="caption">
-      Granularity
-    </p>
-    <q-select
-      v-model="granularity"
-      :options="granularities"
-      :disable="isGranularitySelectDisabled"
-      @input="granularityOnChange"
-    />
-    <p class="caption">
-      Start date
-    </p>
+    <p class="caption">Base date</p>
     <q-datetime
-      v-model="startDate"
+      v-model="baseTime"
       type="date"
-      :default-value="defaulteStartDate"
-      :disable="isStartDateSelectDisabled"
-      :min="minStartDate"
-      :max="maxStartDate"
-      @change="startDateOnChange"
+      :display-value="baseTimeDisplayValue"
+      :default-value="minBaseTime"
+      :min="minBaseTime"
+      :max="maxBaseTime"
+      :disable="isBaseTimeSelectDisabled"
     />
-    <p class="caption">
-      Comparison date
-    </p>
+    <p class="caption">Comparison date</p>
     <q-select
-      v-model="comparisonDate"
-      :options="comparisonDates"
-      :disable="isComparisonDateSelectDisabled"
-      @input="comparisonDateOnChange"
+      v-model="comparisonTime"
+      :options="validComparisonTimes"
+      :disable="isComparisonTimesSelectDisabled"
     />
     <div class="chart-container">
       <svg class="chart" />
@@ -54,52 +43,166 @@
   </div>
 </template>
 
-<style>
-.chart {
-  overflow: visible !important;
-  margin-top: 2rem;
-}
-</style>
-
 <script>
+import { Loading } from 'quasar'
 import * as d3 from 'd3'
+import moment from 'moment'
+import { mixin } from './mixin'
 
-const weekDays = 7
+const WEEKDAYS = 7
 
 export default {
   name: 'BarChart',
   data () {
     return {
-      users: [],
-      userOptions: [],
+      firstTier: 'users',
+      secondTier: 'times',
+      inputData: '',
       allTimes: [],
-      times: [],
-      dataset: [],
-      aggregatedData: {},
+      users: [],
       user: '',
-      granularity: 60 * 3,
-      granularities: [
+      userOptions: [],
+      isUserSelectDisabled: true,
+      granularity: 60 * 24,
+      granularityOptions: [
         { label: '3 hrs', value: 60 * 3 },
         { label: '6 hrs', value: 60 * 6 },
         { label: '1 day', value: 60 * 24 }
       ],
       isGranularitySelectDisabled: true,
-      userBpsPerDate: [],
-      defaulteStartDate: '',
-      minStartDate: '',
-      maxStartDate: '',
-      startDate: '',
-      baseDates: [],
-      comparisonDate: '',
-      comparisonDates: [],
-      isUserSelectDisabled: true,
-      isStartDateSelectDisabled: true,
-      isComparisonDateSelectDisabled: true
+      baseTime: '',
+      comparisonTime: '',
+      selectedBaseTimes: [],
+      selectedComparisonTimes: [],
+      isBaseTimeSelectDisabled: true,
+      isComparisonTimesSelectDisabled: true
     }
   },
+  computed: {
+    parsedData () {
+      return this.parseData(this.inputData)
+    },
+    allDates () {
+      return this.getAllDates(this.allTimes)
+    },
+    partitionsPerDay () {
+      return 1440 / this.granularity
+    },
+    baseTimeDisplayValue () {
+      if (!this.baseTime) return ''
+      return `${moment(this.baseTime).format('YYYY-MM-DD')} ~ ${moment(this.baseTime).add(6, 'd').format('YYYY-MM-DD')}`
+    },
+    minBaseTime () {
+      return this.allDates[0]
+    },
+    maxBaseTime () {
+      return this.allDates[this.allDates.length - 1]
+    },
+    aggregatedData () {
+      const transferredData = this.transfer(this.parsedData, this.firstTier)
+
+      const secondTransferredData = {}
+      for (const key in transferredData) {
+        secondTransferredData[key] = this.transfer(transferredData[key], this.secondTier)
+      }
+      console.log('secondTransferredData: ', secondTransferredData)
+      return this.aggregate(secondTransferredData)
+    },
+    granulatedData () {
+      return this.granulateAggregatedData(this.aggregatedData, this.granularity)
+    },
+    userData () {
+      const emptyData = ['', []]
+      const userData = this.granulatedData.find((item) => item[0] === this.user) || emptyData
+      return userData[1]
+    },
+    times () {
+      return this.granulateTimes(this.allTimes, this.granularity)
+    },
+    range () {
+      return this.partitionsPerDay * WEEKDAYS
+    },
+    baseDates () {
+      const baseDateIndex = this.allDates.indexOf(this.baseTime.slice(0, 10))
+      return this.allDates.slice(baseDateIndex, baseDateIndex + WEEKDAYS)
+    },
+    baseTimeIndex () {
+      const baseTime = this.baseTime.slice(0, 10)
+      return this.userData.findIndex((item) => item[0].slice(0, 10) === baseTime)
+    },
+    baseTimes () {
+      return this.userData.slice(this.baseTimeIndex, this.baseTimeIndex + this.range)
+    },
+    validComparisonTimes () {
+      const validComparisonTimes = []
+      if (this.baseDateIndex === 0) return validComparisonTimes
+      for (let i = this.baseTimeIndex - this.range; i + this.range > 0; i -= this.range) {
+        const endIndex = i + this.range - 1
+        if (i < 0) i = 0
+        validComparisonTimes.push({
+          label: `${this.userData[i][0].slice(0, 10)} ~ ${this.userData[endIndex][0].slice(0, 10)}`,
+          value: [this.userData[i][0].slice(0, 10), endIndex - i]
+        })
+      }
+      return validComparisonTimes
+    },
+    comparisonDates () {
+      const comparisonDates = this.comparisonTimes.reduce((datesObj, time) => {
+        datesObj[time[0].slice(0, 10)] = true
+        return datesObj
+      }, {})
+      return Object.keys(comparisonDates)
+    },
+    comparisonTimes () {
+      // 如果 this.comparisonTime[0] 直接放 index，會造成出圖後再更改 granularity 時，拿到的會是舊的 index
+      const comparisonTime = this.comparisonTime[0]
+      // 如果不用 offset，直接用 comparisonTimeIndex + this.range，會變成如果 validComparisonTimes 不到七天 ex. 11/1-11/3，會抓成 11/1-11/7
+      const comparisonTimeOffset = this.comparisonTime[1]
+      const comparisonTimeIndex = this.userData.findIndex((item) => item[0].slice(0, 10) === comparisonTime)
+      return this.userData.slice(comparisonTimeIndex, comparisonTimeIndex + comparisonTimeOffset + 1)
+    }
+  },
+  watch: {
+    aggregatedData (value) {
+      console.log('aggregatedData: ', value)
+    },
+    validComparisonTimes (value) {
+      if (!this.comparisonTime.length || !this.validComparisonTimes.length) return
+      const emptyData = { label: '', value: [] }
+      const foundComparisonTime = this.validComparisonTimes.find((item) => item.value[0] === this.comparisonTime[0]) || emptyData
+      this.comparisonTime = foundComparisonTime.value
+    },
+    granularity (value) {
+      d3.select('.chart').selectAll('*').remove()
+
+      if (!this.comparisonTime.length) return
+      const emptyData = { label: '', value: [] }
+      const foundComparisonTime = this.validComparisonTimes.find((item) => item.value[0] === this.comparisonTime[0]) || emptyData
+      this.comparisonTime = foundComparisonTime.value
+
+      if (!value || !this.user || !this.baseTime || !this.comparisonTimes.length) return
+      this.renderBarChart(this.baseTimes, this.comparisonTimes)
+    },
+    user (value) {
+      d3.select('.chart').selectAll('*').remove()
+      this.isBaseTimeSelectDisabled = false
+
+      if (!value || !this.baseTime || !this.comparisonTimes.length) return
+      this.renderBarChart(this.baseTimes, this.comparisonTimes)
+    },
+    baseTime (value) {
+      d3.select('.chart').selectAll('*').remove()
+      this.isComparisonTimesSelectDisabled = false
+    },
+    comparisonTime (value) {
+      if (!value.length) return
+      this.renderBarChart(this.baseTimes, this.comparisonTimes)
+    }
+  },
+  mixins: [mixin],
   methods: {
     uploadFile (file, updateProgress) {
-      this.resetData()
+      Loading.show()
       return new Promise((resolve, reject) => {
         resolve(file)
       })
@@ -108,290 +211,166 @@ export default {
       const reader = new FileReader()
 
       reader.onload = (evt) => {
-        const inputData = evt.target.result
-        console.time('parse data')
-        const parsedData = this.parseData(inputData)
-        console.timeEnd('parse data')
+        // reset
+        this.allTimes = []
+        this.users = []
+        this.userOptions = []
 
-        this.dataset = parsedData
+        this.inputData = evt.target.result
+
+        this.isGranularitySelectDisabled = false
         this.isUserSelectDisabled = false
+        Loading.hide()
       }
       reader.readAsText(file)
     },
-    resetData () {
-      d3.select('.chart').selectAll('*').remove()
-      this.users = []
-      this.dataset = []
-      this.user = ''
-      this.userBpsPerDate = []
-      this.minStartDate = ''
-      this.maxStartDate = ''
-      this.startDate = ''
-      this.baseDates = []
-      this.comparisonDate = ''
-      this.comparisonDates = []
-      this.isUserSelectDisabled = true
-      this.isGranularitySelectDisabled = true
-      this.isStartDateSelectDisabled = true
-      this.isComparisonDateSelectDisabled = true
-    },
+    /**
+     * 描述
+     * @param {string} data - The input csv data.
+     * @returns {array}
+     */
     parseData (data) {
       const times = {}
       const users = {}
 
-      const parsedData = data.split(/\n/)
-        .filter((item) => item !== '')
-        .map((item) => {
-          let arr = item.split(',')
-            .map((value) => value.trim())
+      const splitData = data.split(/\n/)
+      const parsedData = []
+      for (const item of splitData) {
+        if (item === '') continue
 
-          // 處理 OTT 含有 comma 的情況，因為會被 split，要把他 concat 回來
-          // 不過目前用 hard code 的方法處理，之後可以想辦法寫的更漂亮一點
-          let result = arr.length === 6
-            ? arr
-            : arr.slice(0, 3).concat([arr[3] + ', ' + arr[4]]).concat(arr.slice(5))
+        let arr = item.split(',')
+          .map((value) => value.trim())
 
-          // 出現過的 user 用 object 存，讓他不會重複
-          result.forEach((field, index) => {
-            if (index === 0) times[field] = true
-            if (index === 1) users[field] = true
-          })
+        // 處理 OTT 含有 comma 的情況，因為會被 split，要把他 concat 回來
+        // 不過目前用 hard code 的方法處理，之後可以想辦法寫的更漂亮一點
+        let result = arr.length === 6
+          ? arr
+          : arr.slice(0, 3).concat([arr[3] + ', ' + arr[4]]).concat(arr.slice(5))
 
-          return result
-        })
+        const time = result[0]
+        times[time] = time
+        const user = result[1]
+        users[user] = user
+        parsedData.push(result)
+      }
 
-      // 把 times 存起來要設 granularity
       for (const prop in times) {
         this.allTimes.push(prop)
       }
-      const newTimes = [this.allTimes[0]]
-      this.allTimes.forEach((time) => {
-        if (new Date(time) - new Date(newTimes[newTimes.length - 1]) >= this.granularity * 60 * 1000) {
-          newTimes.push(time)
-        }
-      })
-      this.times = newTimes
-      // 把 user 存起來給下拉選單用
+
       for (const prop in users) {
         this.users.push(prop)
         this.userOptions.push({ label: prop, value: prop })
       }
+      this.user = this.users[0]
 
+      console.log('parsedData: ', parsedData)
       return parsedData
     },
-    userOnChange (user) {
+    /**
+     * 描述
+     * @param {array} times - All value of the time field of the parsedData.
+     * @returns {array}
+     */
+    getAllDates (times) {
+      return times.reduce((acc, cur) => {
+        const date = cur.slice(0, 10)
+        if (!acc.includes(date)) return [...acc, date]
+        return acc
+      }, [])
+    },
+    /**
+     * 描述
+     * @param {array} baseTimes - Bps per selected granularity of the base times.
+     * @param {array} comparisonTimes - Bps per selected granularity of the comparison times.
+     */
+    renderBarChart (baseTimes, comparisonTimes) {
       d3.select('.chart').selectAll('*').remove()
-      this.userBpsPerDate = []
-      this.minStartDate = ''
-      this.maxStartDate = ''
-      this.startDate = ''
-      this.comparisonDate = ''
-      this.isGranularitySelectDisabled = true
-      this.isStartDateSelectDisabled = true
 
-      const userData = this.dataset.filter((item) => item[1] === user)
-      const result = this.accumulateBpsPerDate(userData)
-      // const aggregatedData = this.aggregate(this.dataset, 'users')
-      // const transferredData = this.transfer(aggregatedData, 'users', this.granularity)
-      // console.log('result: ', result)
-      // console.log('aggregatedData: ', aggregatedData)
-      // console.log('transferredData: ', transferredData)
-      // const selectedData = transferredData.map((date) => {
-      //   const targetUserIndex = this.users.indexOf(user)
-      //   return [date[date.length - 1], date[targetUserIndex]]
-      // })
-      // const result = selectedData
-      // console.log('selectedData: ', selectedData)
-      // this.aggregatedData = aggregatedData
-      this.userBpsPerDate = result
-      console.log('dataset: ', this.dataset)
-      console.log('userData: ', userData)
-      console.log('userBpsPerDate: ', result)
-
-      const dates = result.map((item) => item[0])
-      this.defaulteStartDate = dates[0]
-      this.minStartDate = dates[0]
-      this.maxStartDate = dates[dates.length - 1]
-      this.isGranularitySelectDisabled = false
-      this.isStartDateSelectDisabled = false
-    },
-    granularityOnChange () {
-      const newTimes = [this.times[0]]
-      // note: 可能可以改用 this.times.filter
-      this.allTimes.forEach((time, index) => {
-        if (new Date(time) - new Date(newTimes[newTimes.length - 1]) >= this.granularity * 60 * 1000) {
-          newTimes.push(time)
-        }
-      })
-      this.times = newTimes
-      const transferredData = this.transfer(this.aggregatedData, 'users', this.granularity)
-      console.log('transferredData: ', transferredData)
-    },
-    accumulateBpsPerDate (data) {
-      const dateBps = {}
-      data
-        .filter((item) => item !== '')
-        .forEach((item) => { // 可以試試看用 reduce
-          const date = item[0].slice(0, 10)
-          if (!dateBps[date]) {
-            dateBps[date] = Number(item[5]) || 0 // todo: improve hardcoding
-          } else {
-            dateBps[date] += Number(item[5]) || 0 // todo: improve hardcoding
-          }
-        })
-      return Object.entries(dateBps)
-    },
-    aggregate (parsedData, type) {
-      let aggregatedData = {}
-      let targetTypeIndex = 0
-      switch (type) {
-        case 'users':
-          targetTypeIndex = 1
-          break
-        case 'nations':
-          targetTypeIndex = 3
-          break
-        case 'otts':
-          targetTypeIndex = 4
-          break
+      const margin = {
+        top: 50,
+        right: 40,
+        bottom: 50,
+        left: 40
       }
+      const chartWidth = 880 - margin.left - margin.right
+      const chartHeight = 600 - margin.top - margin.bottom
+      const barWidth = 50 / this.partitionsPerDay
 
-      parsedData.forEach((item) => {
-        // 找出 time，沒有就 push 新增一個，已經有存了就直接放進去原本的
-        if (aggregatedData[item[0]]) {
-          // 根據下拉選單選定的 type 找到該欄位，找不到就 push 新增一個，已經有存了就直接跟原本的加起來
-          if (aggregatedData[item[0]][item[targetTypeIndex]]) {
-            aggregatedData[item[0]][item[targetTypeIndex]] += Number(item[5])
-          } else {
-            aggregatedData[item[0]][item[targetTypeIndex]] = Number(item[5])
-          }
-        } else {
-          aggregatedData[item[0]] = { [item[targetTypeIndex]]: Number(item[5]) }
-        }
-      })
-      return aggregatedData
-    },
-    transfer (aggregatedData, type, granularity) {
-      const transferredData = []
-      let count = 0
-      let newRow = Array(this[type].length).fill(0)
-      Object.entries(aggregatedData).forEach((row, index) => {
-        // 建立一個只放 bps 的 array
-        if (new Date(row[0]) - new Date(this.times[count]) >= granularity * 60 * 1000) {
-          // 把 X 軸的 label 放進去做二維 table
-          newRow.push(this.times[count])
-          transferredData.push(newRow)
-          newRow = Array(this[type].length).fill(0)
-          count++
-        }
-        for (const field in row[1]) {
-          const fieldIndex = this[type].indexOf(field)
-          newRow[fieldIndex] += row[1][field]
-        }
-        if (index === this.allTimes.length - 1) {
-          newRow.push(this.times[count])
-          transferredData.push(newRow)
-        }
-      })
-      return transferredData
-    },
-    startDateOnChange (value) {
-      d3.select('.chart').selectAll('*').remove()
-
-      const date = value.slice(0, 10)
-      const startIndex = this.userBpsPerDate.findIndex((item) => item[0].slice(0, 10) === date)
-      const selectedDates = this.userBpsPerDate.slice(startIndex, startIndex + weekDays)
-      this.baseDates = selectedDates
-
-      const validComparisonDates = []
-      for (let i = startIndex - weekDays; i + weekDays > 0; i -= weekDays) {
-        const endIndex = i + weekDays - 1
-        if (i < 0) i = 0
-        validComparisonDates.push({
-          label: `${this.userBpsPerDate[i][0]} ~ ${this.userBpsPerDate[endIndex][0]}`,
-          value: [this.userBpsPerDate[i][0], endIndex - i]
-        })
-      }
-      this.comparisonDates = validComparisonDates
-
-      this.isComparisonDateSelectDisabled = false
-    },
-    comparisonDateOnChange (value) {
-      const date = value[0]
-      const offset = value[1] + 1
-      const startIndex = this.userBpsPerDate.findIndex((item) => item[0] === date)
-      const selectedDates = this.userBpsPerDate.slice(startIndex, startIndex + offset)
-      this.renderBarChart(this.baseDates.slice(0, weekDays), selectedDates)
-    },
-    renderBarChart (baseDates, comparisonDates) {
-      d3.select('.chart').selectAll('*').remove()
-
-      const chartWidth = 500
-      const chartHeight = 500
-      const barWidth = 30
-      const bpsArr = baseDates.map((item) => item[1])
-      const comparisonBpsArr = comparisonDates.map((item) => item[1])
+      const bpsArr = baseTimes.map((item) => item[1])
+      const comparisonBpsArr = comparisonTimes.map((item) => item[1])
       const allData = bpsArr.concat(comparisonBpsArr)
 
       const min = d3.min(allData) * 0.95
       const max = d3.max(allData) * 1.05
 
-      const padData = (data, pushOrUnshift) => {
+      // padData 跟 padDates 想辦法寫成一個 function
+      const padData = (data, pushOrUnshift, granularity, length) => {
+        if (data.length <= 0) return data // watcher 似乎會把整個相關的 code 都跑一遍，所以一開始 data 是空陣列就直接原封不動 return data，才不會噴錯
         const paddedData = data.slice()
         // 相當之醜
-        for (let i = pushOrUnshift === 'push' ? paddedData.length - 1 : 0; paddedData.length < weekDays; pushOrUnshift === 'push' ? i++ : '') {
+        for (let i = pushOrUnshift === 'push' ? paddedData.length - 1 : 0; paddedData.length < length; pushOrUnshift === 'push' ? i++ : '') {
           paddedData[pushOrUnshift]([
             pushOrUnshift === 'push'
-              ? new Date(new Date(paddedData[i][0]).getTime() + 86400000).toISOString().slice(0, 10)
-              : new Date(new Date(paddedData[i][0]).getTime() - 86400000).toISOString().slice(0, 10),
+              ? moment(new Date(paddedData[i][0]).getTime() + (granularity * 60 * 1000)).format('YYYY-MM-DD HH:mm:ss')
+              : moment(new Date(paddedData[i][0]).getTime() - (granularity * 60 * 1000)).format('YYYY-MM-DD HH:mm:ss'),
             min
           ])
         }
         return paddedData
       }
 
-      const paddedBaseDates = padData(baseDates, 'push')
-      const paddedComparisonDates = padData(comparisonDates, 'unshift')
-      const growthRates = paddedBaseDates.map((item, index) => [
+      const padDates = (dates, pushOrUnshift, granularity, length) => {
+        if (dates.length <= 0) return dates // watcher 似乎會把整個相關的 code 都跑一遍，所以一開始 dates 是空陣列就直接原封不動 return dates，才不會噴錯
+        const paddedDates = dates.slice()
+        // 相當之醜
+        for (let i = pushOrUnshift === 'push' ? paddedDates.length - 1 : 0; paddedDates.length < length; pushOrUnshift === 'push' ? i++ : '') {
+          paddedDates[pushOrUnshift](
+            pushOrUnshift === 'push'
+              ? moment(new Date(paddedDates[i]).getTime() + (granularity * 60 * 1000)).format('YYYY-MM-DD')
+              : moment(new Date(paddedDates[i]).getTime() - (granularity * 60 * 1000)).format('YYYY-MM-DD')
+          )
+        }
+        return paddedDates
+      }
+
+      const paddedBaseTimes = padData(baseTimes, 'push', this.granularity, this.range)
+      const paddedComparisonTimes = padData(comparisonTimes, 'unshift', this.granularity, this.range)
+      const paddedBaseDates = padDates(this.baseDates, 'push', 60 * 24, WEEKDAYS)
+      const paddedComparisonDates = padDates(this.comparisonDates, 'unshift', 60 * 24, WEEKDAYS)
+      const growthRates = paddedBaseTimes.map((item, index) => [
         item[0],
-        paddedComparisonDates[index][1] === min // 檢查上週數據是否為最小值
+        paddedComparisonTimes[index][1] === min // 檢查上週數據是否為最小值
           ? 0 // 成長率是無限的話，先設為 0
           : item[1] === min // 上週數據不是最小值，檢查這週數據是否為最小值
-            ? Math.round(((0 - paddedComparisonDates[index][1]) / paddedComparisonDates[index][1]) * 100) // 這週數據是最小值，用 0 計算成長率(其實成長率就是 -100%)
-            : Math.round(((item[1] - paddedComparisonDates[index][1]) / paddedComparisonDates[index][1]) * 100) // 這週數據不是最小值，計算成長率
+            ? -100 // 這週數據是最小值，用 0 計算成長率(其實成長率就是 -100%)
+            : Math.round(((item[1] - paddedComparisonTimes[index][1]) / paddedComparisonTimes[index][1]) * 100) // 這週數據不是最小值，計算成長率
       ])
-      console.log({ growthRates, paddedBaseDates, paddedComparisonDates, min })
 
+      // the SVG
+      const chart = d3.select('.chart')
+        .attr('width', chartWidth + margin.left + margin.right)
+        .attr('height', chartHeight + margin.top + margin.bottom)
+        .attr('transform', `translate(-${margin.left})`)
+        .append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`)
+
+      // prepare for axes
       const xLinear = d3.scaleBand()
-        .domain(paddedBaseDates.map((item) => item[0]))
+        .domain(paddedBaseDates)
         .range([0, chartWidth])
-
       const comparisonXLinear = d3.scaleBand()
-        .domain(paddedComparisonDates.map((item) => item[0]))
+        .domain(paddedComparisonDates)
         .range([0, chartWidth])
-
       const yLinear = d3.scaleLinear()
         .domain([min, max])
         .range([0, chartHeight])
-
       const reverseYLinear = d3.scaleLinear()
         .domain([max, min])
         .range([0, chartHeight])
-
-      // const reverseLineYLinear = d3.scaleLinear()
-      //   .domain([max, min])
-      //   .range([0, chartHeight])
-
       const rateYLinear = d3.scaleLinear()
-        .domain([d3.max(growthRates.map((item) => item[1])), d3.min(growthRates.map((item) => item[1]))])
+        .domain([d3.max([100, ...growthRates.map((item) => item[1])]), -100])
         .range([0, chartHeight])
-      // const rateYLinear = d3.scaleLinear()
-      //   .domain([100, -100])
-      //   .range([0, chartHeight])
-
-      const chart = d3.select('.chart')
-        .attr('width', chartWidth)
-        .attr('height', chartHeight)
 
       const xAxis = d3.axisBottom(xLinear)
       const comparisonXAxis = d3.axisTop(comparisonXLinear)
@@ -409,18 +388,24 @@ export default {
       const rateYAxis = d3.axisRight(rateYLinear)
         .tickFormat((d) => d + '%')
 
+      // draw axes
       chart.append('g')
         .attr('transform', `translate(0, ${chartHeight})`)
         .call(xAxis)
-      chart.append('g').call(comparisonXAxis)
-      chart.append('g').call(yAxis)
+        .selectAll('text')
       chart.append('g')
-        .attr('transform', `translate(${chartHeight}, 0)`)
+        .call(comparisonXAxis)
+        .selectAll('text')
+      chart.append('g')
+        .call(yAxis)
+      chart.append('g')
+        .attr('transform', `translate(${chartWidth}, 0)`)
         .call(rateYAxis)
 
-      const interval = ((chartWidth - (paddedBaseDates.length * barWidth)) / (paddedBaseDates.length))
+      // draw bars
+      const interval = ((chartWidth - (paddedBaseTimes.length * barWidth)) / (paddedBaseTimes.length))
       chart.selectAll('rect')
-        .data(paddedBaseDates.map((item) => item[1]))
+        .data(paddedBaseTimes.map((item) => item[1]))
         .enter()
         .append('rect')
         .attr('x', (d, i) => i * (barWidth + interval) + (interval / 2))
@@ -430,6 +415,7 @@ export default {
         .attr('fill', '#5F4B8B')
         .attr('class', 'bars')
 
+      // draw line
       chart.append('path')
         .datum(growthRates.map((item) => item[1]))
         .attr('fill', 'none')
@@ -441,62 +427,160 @@ export default {
         )
         .attr('class', 'line')
 
-      // =======================try tooltip======================
+      // draw tooltip
+      const xFullLinear = d3.scaleBand()
+        .domain(paddedBaseTimes.map((item) => item[0]))
+        .range([0, chartWidth])
 
-      const tooltip = d3.select('.chart-container')
-        .append('div')
-        .attr('id', 'tooltip')
-        .style('position', 'absolute')
-        .style('visibility', 'hidden')
-        .style('background-color', '#d3d3d3')
-        .text("I'm a circle!")
+      // custom invert function, reference: https://bl.ocks.org/shimizu/808e0f5cadb6a63f28bb00082dc8fe3f
+      xFullLinear.invert = (function () {
+        const domain = xFullLinear.domain()
+        const range = xFullLinear.range()
+        const scale = d3.scaleQuantize().domain(range).range(domain)
+        return function (x) {
+          return scale(x)
+        }
+      })()
 
-      chart.on('mouseover', () => tooltip.style('visibility', 'visible'))
-        .on('mousemove', () => tooltip.style('top', (event.pageY - 80) + 'px').style('left', (event.pageX + 20) + 'px'))
-        .on('mouseout', () => tooltip.style('visibility', 'hidden'))
+      const guideLine = chart.append('line')
+        .attr('class', 'guideLine')
+        .attr('x1', 0)
+        .attr('y1', 0)
+        .attr('x2', 0)
+        .attr('y2', chartHeight)
+        .attr('stroke', 'red')
+      const tooltipCircle = chart
+        .append('g')
+        .append('circle')
+        .style('fill', 'none')
+        .attr('stroke', 'black')
+        .attr('r', 4)
+        .style('opacity', 0)
+      const focusTexts = chart
+        .append('g')
+        .style('opacity', 0)
+        .style('fill', 'black')
+        .style('font-size', '0.8rem')
+        .attr('text-anchor', 'left')
+        .attr('alignment-baseline', 'middle')
+      const tooltipHeight = 15 * 6 + 16
+      const tooltipBackground = focusTexts.append('rect')
+        .attr('width', 180)
+        .attr('height', tooltipHeight)
+        .style('fill', 'rgba(255, 255, 255, 0.95)')
+        .style('stroke', '#d9d9d9')
+        .style('filter', 'url(#shadow)')
+        .attr('rx', 3)
+        .attr('ry', 3)
+      focusTexts.append('text')
+        .attr('class', 'comparison-date-label')
+        .style('fill', '#808080')
+      focusTexts.append('text')
+        .attr('class', 'comparison-date-value')
+      focusTexts.append('text')
+        .attr('class', 'base-date-label')
+        .style('fill', '#808080')
+      focusTexts.append('text')
+        .attr('class', 'base-date-value')
+      focusTexts.append('text')
+        .attr('class', 'growth-rate-label')
+        .style('fill', '#808080')
+      focusTexts.append('text')
+        .attr('class', 'growth-rate-value')
+      chart.append('rect')
+        .style('fill', 'none')
+        .style('pointer-events', 'all')
+        .attr('width', chartWidth)
+        .attr('height', chartHeight)
+        .on('mouseover', mouseover)
+        .on('mousemove', mousemove)
+        .on('mouseout', mouseout)
+      chart.append('defs')
+        .append('filter')
+        .attr('id', 'shadow')
+        .append('feDropShadow')
+        .attr('dx', 2)
+        .attr('dy', 2)
+        .attr('stdDeviation', 4)
+        .attr('flood-color', 'rgb(0 0 0 / 10%)')
 
-      // ===========================================================
+      function mouseover () {
+        tooltipCircle.style('opacity', 1)
+        focusTexts.style('opacity', 1)
+        guideLine.style('opacity', '1')
+      }
 
-      // ========================origin bar chart===================
+      function mousemove () {
+        // get mouse coordinate
+        const xy = d3.mouse(chart.node())
+        // get nearest X axis scale
+        const d = xFullLinear.invert(xy[0])
+        // get nearest X axis scale x coordinate
+        const nx = xFullLinear(d) + (xFullLinear.bandwidth() / 2)
+        // get nearest Y axis scale y coordinate
+        const index = growthRates.findIndex((item) => item[0] === d)
+        const ny = rateYLinear(growthRates[index][1])
 
-      // chart.selectAll('rect')
-      //   .on('mouseover', (d, i) => {
-      //     console.log(d, paddedComparisonDates.map((item) => item[1])[i])
-      //     bars.append('text')
-      //       .text(d)
-      //       .attr('y', chartHeight - yLinear(d) - 6)
-      //       .attr('x', i * (barWidth + interval) + (interval / 2) + (barWidth / 2))
-      //       .style('fill', '#000')
-      //       .style('font-size', '12px')
-      //       .style('font-weight', 'bold')
-      //       .style('text-anchor', 'middle')
-      //       .attr('class', 'tooltip')
-      //   })
-      //   .on('mouseout', () => bars.select('.tooltip').remove())
-
-      // const bars = chart.selectAll('g')
-      //   .data(paddedBaseDates.map((item) => item[1]))
-      //   .enter()
-      //   .append('g')
-
-      // const interval = ((chartWidth - (paddedBaseDates.length * barWidth)) / (paddedBaseDates.length))
-      // bars.append('rect')
-      //   .attr('x', (d, i) => i * (barWidth + interval) + (interval / 2))
-      //   .attr('y', (d) => chartHeight - yLinear(d))
-      //   .attr('width', barWidth)
-      //   .attr('height', (d) => yLinear(d))
-      //   .attr('fill', '#5F4B8B')
-
-      // bars.append('text')
-      //   .attr('y', (d) => chartHeight - yLinear(d) - 6)
-      //   .attr('x', (d, i) => i * (barWidth + interval) + (interval / 2) + (barWidth / 2))
-      //   .style('fill', '#000')
-      //   .style('font-size', '12px')
-      //   .style('font-weight', 'bold')
-      //   .style('text-anchor', 'middle')
-      //   .text((d) => d)
-
-      // ===========================================================
+        guideLine
+          .attr('x1', nx)
+          .attr('x2', nx)
+        tooltipCircle
+          .attr('cx', nx)
+          .attr('cy', ny)
+        focusTexts.select('.comparison-date-label')
+          .html('Comparison Time:')
+          .transition()
+          .ease(d3.easeLinear)
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny - 37)
+        focusTexts.select('.comparison-date-value')
+          .html(paddedComparisonTimes[index][0])
+          .transition()
+          .ease(d3.easeLinear)
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny - 22)
+        focusTexts.select('.base-date-label')
+          .html('Base Time:')
+          .transition()
+          .ease(d3.easeLinear)
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny - 7)
+        focusTexts.select('.base-date-value')
+          .html(growthRates[index][0])
+          .transition()
+          .ease(d3.easeLinear)
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny + 7)
+        focusTexts.select('.growth-rate-label')
+          .html('Growth Rate:')
+          .transition()
+          .ease(d3.easeLinear)
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny + 22)
+        focusTexts.select('.growth-rate-value')
+          .html(`${growthRates[index][1]}%`)
+          .transition()
+          .ease(d3.easeLinear)
+          .duration(100)
+          .attr('x', nx + 15 + 18)
+          .attr('y', ny + 37)
+        tooltipBackground
+          .transition()
+          .ease(d3.easeLinear)
+          .duration(100)
+          .attr('x', nx + 15)
+          .attr('y', ny - (tooltipHeight / 2) - 5)
+      }
+      function mouseout () {
+        tooltipCircle.style('opacity', 0)
+        focusTexts.style('opacity', 0)
+        guideLine.style('opacity', '0')
+      }
     }
   }
 }

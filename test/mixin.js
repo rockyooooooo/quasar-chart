@@ -61,6 +61,6 @@ export const mixin = {
  * @param {any} obj - 想檢查是否為 object 的變數
  * @returns {boolean}
  */
-const isObject = (obj) => {
+export const isObject = (obj) => {
   return Object.prototype.toString.call(obj) === '[object Object]'
 }

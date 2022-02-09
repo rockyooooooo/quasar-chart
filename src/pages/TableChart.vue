@@ -10,102 +10,45 @@
     <p class="caption">Type</p>
     <q-select
       v-model="type"
-      :options="types"
+      :options="typeOptions"
       :disable="isTypeSelectDisabled"
-      @input="typeOnChange"
     />
     <p class="caption">Granularity</p>
     <q-select
       v-model="granularity"
-      :options="granularities"
+      :options="granularityOptions"
       :disable="isGranularitySelectDisabled"
-      @input="granularityOnChange"
     />
     <q-table
-      title="Table Title"
-      :data="datasetForTable"
+      class="q-mt-lg"
+      :data="dataForTable"
       :columns="columns"
       row-key="name"
     />
-    <q-btn @click="handleFlip" :disable="isFlipDiabled">Flip</q-btn>
+    <q-btn @click="handleFlip" :disable="isFlipDisabled">Flip</q-btn>
   </div>
 </template>
 
-<style>
-.q-table-container {
-  margin: 2rem 0;
-}
-
-.flipped table {
-  display: flex;
-}
-
-.flipped table th,
-.flipped table td {
-  text-align: center;
-}
-
-.flipped table thead {
-  border: none;
-}
-
-.flipped table > thead > tr {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.flipped table > thead > tr > th {
-  height: 100%;
-  width: 100%;
-}
-
-.flipped table > thead > tr{
-  border-right: solid 1px rgba(0, 0, 0, 0.12);
-}
-
-.flipped table > tbody {
-  display: flex;
-}
-
-.flipped table > tbody > tr {
-  display: flex;
-  flex-direction: column;
-}
-
-.flipped table > tbody > tr > td {
-  border-bottom: none;
-}
-
-.flipped table > tbody > tr + tr {
-  border-left: solid 1px rgba(0, 0, 0, 0.12);
-}
-</style>
-
 <script>
+import { Loading } from 'quasar'
+import { mixin } from './mixin'
+
 export default {
   name: 'TableChart',
   data () {
     return {
-      columns: [],
-      dataset: [],
-      datasetForTable: [],
-      aggregatedData: {},
-      allTimes: [],
-      times: [],
-      users: [],
-      ips: [],
-      nations: [],
-      otts: [],
-      type: '',
-      types: [
+      inputData: '',
+      firstTier: 'times',
+      secondTier: 'users',
+      type: 'users',
+      typeOptions: [
         { label: 'User', value: 'users' },
         { label: 'Nation', value: 'nations' },
         { label: 'OTT Service', value: 'otts' }
       ],
       isTypeSelectDisabled: true,
-      granularity: 30,
-      granularities: [
+      granularity: 5,
+      granularityOptions: [
         { label: '5 mins', value: 5 },
         { label: '30 mins', value: 30 },
         { label: '1 hr', value: 60 },
@@ -114,15 +57,81 @@ export default {
         { label: '1 day', value: 60 * 24 }
       ],
       isGranularitySelectDisabled: true,
-      firstColumnType: 'times',
-      columnsType: '',
-      hasFlipped: false,
-      isFlipDiabled: true
+      allTimes: [],
+      users: [],
+      nations: [],
+      otts: [],
+      isFlipDisabled: true,
+      isFlipped: false
     }
   },
+  computed: {
+    parsedData () {
+      return this.parseData(this.inputData)
+    },
+    transferredData () {
+      if (!this.parsedData.length) return
+      const transferredData = this.transfer(this.parsedData, this.firstTier)
+
+      const secondTransferredData = {}
+      for (const key in transferredData) {
+        secondTransferredData[key] = this.transfer(transferredData[key], this.secondTier)
+      }
+      return secondTransferredData
+    },
+    times () {
+      return this.granulateTimes(this.allTimes, this.granularity)
+    },
+    dataForTable () {
+      let aggregatedAndGranulatedData = []
+      if (this.firstTier === 'times') {
+        const granulatedData = this.granulateTransferredData(this.transferredData, this.granularity)
+        aggregatedAndGranulatedData = this.aggregate(granulatedData)
+      }
+      if (this.secondTier === 'times') {
+        const aggregatedData = this.aggregate(this.transferredData)
+        aggregatedAndGranulatedData = this.granulateAggregatedData(aggregatedData, this.granularity)
+      }
+
+      return this.transferForTable(aggregatedAndGranulatedData)
+    },
+    columns () {
+      if (!this.parsedData.length) return []
+      const columnsValue = this[this.secondTier]
+
+      const columns = []
+      columns.push({
+        name: this.firstTier,
+        label: this.firstTier + ' / ' + this.secondTier,
+        field: (item) => item[item.length - 1],
+        align: 'center'
+      })
+      columnsValue.forEach((field, index) => columns.push({
+        name: field,
+        label: field,
+        sortable: true,
+        field: (item) => item[index] // note: 如果 dataset 是物件，這邊可以直接放 key，就會找到對應的 value，就不用為了轉成 array 又要對齊 column 的位置。但是這樣 datasetForTable 會不知道怎麼做。
+      }))
+      return columns
+    }
+  },
+  watch: {
+    type (value) {
+      console.log('type: ', value)
+      this.isFlipped
+        ? this.firstTier = value
+        : this.secondTier = value
+      console.log('first tier: ', this.firstTier)
+      console.log('second tier: ', this.secondTier)
+    },
+    granularity (value) {
+      console.log('new granularity: ', value)
+    }
+  },
+  mixins: [mixin],
   methods: {
     uploadFile (file, updateProgress) {
-      this.reset()
+      Loading.show()
       return new Promise((resolve, reject) => {
         resolve(file)
       })
@@ -131,237 +140,93 @@ export default {
       const reader = new FileReader()
 
       reader.onload = (evt) => {
-        const inputData = evt.target.result
-        console.time('parse data')
-        const parsedData = this.parseData(inputData)
-        console.timeEnd('parse data')
-        console.log('parsedData: ', parsedData)
+        this.inputData = evt.target.result
 
-        this.dataset = parsedData
-        this.datasetForTable = parsedData
         this.isTypeSelectDisabled = false
+        this.isGranularitySelectDisabled = false
+        this.isFlipDisabled = false
+        Loading.hide()
       }
       reader.readAsText(file)
     },
-    reset () {
-      this.columns = [
-        {
-          name: 'time',
-          label: 'Time',
-          field: (item) => item[0]
-        },
-        {
-          name: 'user',
-          label: 'user',
-          field: (item) => item[1]
-        },
-        {
-          name: 'topIP',
-          label: 'Top IP',
-          field: (item) => item[2]
-        },
-        {
-          name: 'nation',
-          label: '國別',
-          field: (item) => item[3]
-        },
-        {
-          name: 'OTTService',
-          label: 'OTT Service',
-          field: (item) => item[4]
-        },
-        {
-          name: 'bps',
-          label: 'bps',
-          field: (item) => item[5]
-        }
-      ]
-      this.dataset = []
-      this.datasetForTable = []
-      this.aggregatedData = {}
-      this.type = ''
-      this.allTimes = []
-      this.times = []
-      this.users = []
-      this.ips = []
-      this.nations = []
-      this.otts = []
-      this.granularity = 5
-      this.isFlipDiabled = true
-      this.isGranularitySelectDisabled = true
-      this.hasFlipped = false
-    },
+    /**
+     * 描述
+     * @param {string} data - The input csv data.
+     * @returns {array}
+     */
     parseData (data) {
       const times = {}
       const users = {}
       const nations = {}
       const otts = {}
 
-      const parsedData = data.split(/\n/)
-        .filter((item) => item !== '')
-        .map((item) => {
-          let arr = item.split(',')
-            .map((value) => value.trim())
+      const splitData = data.split(/\n/)
+      const parsedData = []
+      for (const item of splitData) {
+        if (item === '') continue
 
-          // 處理 OTT 含有 comma 的情況，因為會被 split，要把他 concat 回來
-          // 不過目前用 hard code 的方法處理，之後可以想辦法寫的更漂亮一點
-          let result = arr.length === 6
-            ? arr
-            : arr.slice(0, 3).concat([arr[3] + ', ' + arr[4]]).concat(arr.slice(5))
+        let arr = item.split(',')
+          .map((value) => value.trim())
 
-          // 出現過的 time, user, nation, ott 用 object 存，讓他不會重複
-          result.forEach((field, index) => {
-            if (index === 0) times[field] = true
-            if (index === 1) users[field] = true
-            if (index === 3) nations[field] = true
-            if (index === 4) otts[field] = true
-          })
+        // 處理 OTT 含有 comma 的情況，因為會被 split，要把他 concat 回來
+        // 不過目前用 hard code 的方法處理，之後可以想辦法寫的更漂亮一點
+        let result = arr.length === 6
+          ? arr
+          : arr.slice(0, 3).concat([arr[3] + ', ' + arr[4]]).concat(arr.slice(5))
 
-          return result
-        })
+        const time = result[0]
+        times[time] = result[0]
+        const user = result[1]
+        users[user] = user
+        const nation = result[3]
+        nations[nation] = nation
+        const ott = result[4]
+        otts[ott] = ott
+        parsedData.push(result)
+      }
 
-      // 把 times, user, nation, ott 用 array 存成一個清單
       for (const prop in times) {
         this.allTimes.push(prop)
       }
-      this.times = this.allTimes
+
       for (const prop in users) {
         this.users.push(prop)
       }
+
       for (const prop in nations) {
         this.nations.push(prop)
       }
+
       for (const prop in otts) {
         this.otts.push(prop)
       }
 
       return parsedData
     },
-    typeOnChange () {
-      this.isFlipDiabled = false
-
-      this.generateColumns()
-      const aggregatedData = this.aggregate(this.dataset, this.type)
-      console.log('aggregatedData: ', aggregatedData)
-      const transferredData = this.transfer(aggregatedData, this.type, this.granularity)
-      console.log('transferredData: ', transferredData)
-      this.aggregatedData = aggregatedData
-      this.datasetForTable = transferredData
-      this.isGranularitySelectDisabled = false
-
-      if (this.hasFlipped) this.flipTable()
-    },
-    granularityOnChange () {
-      const newTimes = [this.times[0]]
-      // note: 可能可以改用 this.times.filter
-      this.allTimes.forEach((time) => {
-        if (new Date(time) - new Date(newTimes[newTimes.length - 1]) >= this.granularity * 60 * 1000) {
-          newTimes.push(time)
-        }
+    /**
+     * 描述
+     * @param {array} data - The data that has been transferred, aggregated, granulated.
+     * @returns {array}
+     */
+    transferForTable (data) {
+      return data.map((firstTierBucket) => {
+        const row = Array(this[this.secondTier].length).fill(0)
+        firstTierBucket[1].forEach((secondTierBucket) => {
+          const index = this[this.secondTier].indexOf(secondTierBucket[0])
+          row[index] += secondTierBucket[1]
+        })
+        row.push(firstTierBucket[0])
+        return row
       })
-      this.times = newTimes
-      this.generateColumns()
-      const transferredData = this.transfer(this.aggregatedData, this.type, this.granularity)
-      this.datasetForTable = transferredData
-
-      if (this.hasFlipped) this.flipTable()
-    },
-    generateColumns () {
-      this.columnsType = this.hasFlipped ? 'times' : this.type
-      this.firstColumnType = this.hasFlipped ? this.type : 'times'
-      const columnsValue = this[this.columnsType]
-
-      this.columns = []
-      this.columns.push({
-        name: this.firstColumnType,
-        label: this.firstColumnType + ' / ' + this.columnsType,
-        field: (item) => item[item.length - 1],
-        align: 'center'
-      })
-      columnsValue.forEach((field, index) => this.columns.push({
-        name: field,
-        label: field,
-        sortable: true,
-        field: (item) => item[index] // note: 如果 dataset 是物件，這邊可以直接放 key，就會找到對應的 value，就不用為了轉成 array 又要對齊 column 的位置。但是這樣 datasetForTable 會不知道怎麼做。
-      }))
-    },
-    aggregate (parsedData, type) {
-      let aggregatedData = {}
-      let targetTypeIndex = 0
-      switch (type) {
-        case 'users':
-          targetTypeIndex = 1
-          break
-        case 'nations':
-          targetTypeIndex = 3
-          break
-        case 'otts':
-          targetTypeIndex = 4
-          break
-      }
-
-      parsedData.forEach((item) => {
-        // 找出 time，沒有就 push 新增一個，已經有存了就直接放進去原本的
-        if (aggregatedData[item[0]]) {
-          // 根據下拉選單選定的 type 找到該欄位，找不到就 push 新增一個，已經有存了就直接跟原本的加起來
-          if (aggregatedData[item[0]][item[targetTypeIndex]]) {
-            aggregatedData[item[0]][item[targetTypeIndex]] += Number(item[5])
-          } else {
-            aggregatedData[item[0]][item[targetTypeIndex]] = Number(item[5])
-          }
-        } else {
-          aggregatedData[item[0]] = { [item[targetTypeIndex]]: Number(item[5]) }
-        }
-      })
-      return aggregatedData
-    },
-    transfer (aggregatedData, type, granularity) {
-      const transferredData = []
-      let count = 0
-      let newRow = Array(this[type].length).fill(0)
-      Object.entries(aggregatedData).forEach((row, index) => {
-        // 建立一個只放 bps 的 array
-        if (new Date(row[0]) - new Date(this.times[count]) >= granularity * 60 * 1000) {
-          // 把 X 軸的 label 放進去做二維 table
-          newRow.push(this.times[count])
-          transferredData.push(newRow)
-          newRow = Array(this[type].length).fill(0)
-          count++
-        }
-        for (const field in row[1]) {
-          const fieldIndex = this[type].indexOf(field)
-          newRow[fieldIndex] += row[1][field]
-        }
-        if (index === this.allTimes.length - 1) {
-          newRow.push(this.times[count])
-          transferredData.push(newRow)
-        }
-      })
-      return transferredData
     },
     handleFlip () {
-      this.hasFlipped = !this.hasFlipped
-      this.flipTable()
-    },
-    flipTable () {
-      this.generateColumns()
-      const flippedArray = this.flipArray(this.datasetForTable)
-      while (flippedArray.length > this[this.firstColumnType].length) {
-        flippedArray.pop()
-      }
-      flippedArray.forEach((row, index) => row.push(this[this.firstColumnType][index]))
-      this.datasetForTable = flippedArray
-    },
-    flipArray (arr) {
-      const flippedArr = []
-      for (let i = 0; i < arr.length; i++) {
-        for (let j = 0; j < arr[i].length; j++) {
-          if (!flippedArr[j]) flippedArr.push([])
-          if (!flippedArr[j][i]) flippedArr[j].push([])
-          flippedArr[j][i] = arr[i][j]
-        }
-      }
-      return flippedArr
+      this.isFlipped = !this.isFlipped
+      const temp = this.firstTier
+      this.firstTier = this.secondTier
+      this.secondTier = temp
+
+      console.log('first tier: ', this.firstTier)
+      console.log('second tier: ', this.secondTier)
     }
   }
 }

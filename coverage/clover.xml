@@ -1,33 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1644313026724" clover="3.2.0">
-  <project timestamp="1644313026724" name="All files">
+<coverage generated="1644395375206" clover="3.2.0">
+  <project timestamp="1644395375206" name="All files">
     <metrics statements="24" coveredstatements="24" conditionals="8" coveredconditionals="8" methods="7" coveredmethods="7" elements="39" coveredelements="39" complexity="0" loc="24" ncloc="24" packages="1" files="1" classes="1"/>
     <file name="mixin.js" path="/Users/allenliao/Documents/vscode-workspace/probation/test/mixin.js">
       <metrics statements="24" coveredstatements="24" conditionals="8" coveredconditionals="8" methods="7" coveredmethods="7"/>
       <line num="1" count="1" type="stmt"/>
-      <line num="10" count="11" type="stmt"/>
-      <line num="11" count="11" type="stmt"/>
-      <line num="12" count="11" type="cond" truecount="4" falsecount="0"/>
-      <line num="14" count="2" type="stmt"/>
-      <line num="15" count="2" type="stmt"/>
+      <line num="10" count="13" type="stmt"/>
+      <line num="11" count="13" type="stmt"/>
+      <line num="12" count="13" type="cond" truecount="4" falsecount="0"/>
+      <line num="14" count="3" type="stmt"/>
+      <line num="15" count="3" type="stmt"/>
       <line num="17" count="5" type="stmt"/>
       <line num="18" count="5" type="stmt"/>
       <line num="20" count="2" type="stmt"/>
       <line num="21" count="2" type="stmt"/>
       <line num="23" count="2" type="stmt"/>
       <line num="24" count="2" type="stmt"/>
-      <line num="27" count="11" type="stmt"/>
-      <line num="28" count="40" type="cond" truecount="2" falsecount="0"/>
-      <line num="29" count="4" type="stmt"/>
-      <line num="31" count="36" type="stmt"/>
-      <line num="35" count="8" type="stmt"/>
-      <line num="43" count="5" type="cond" truecount="2" falsecount="0"/>
-      <line num="44" count="2" type="stmt"/>
+      <line num="27" count="13" type="stmt"/>
+      <line num="28" count="45" type="cond" truecount="2" falsecount="0"/>
+      <line num="29" count="5" type="stmt"/>
+      <line num="31" count="40" type="stmt"/>
+      <line num="35" count="10" type="stmt"/>
+      <line num="43" count="6" type="cond" truecount="2" falsecount="0"/>
+      <line num="44" count="3" type="stmt"/>
       <line num="45" count="6" type="stmt"/>
       <line num="48" count="16" type="stmt"/>
       <line num="51" count="18" type="stmt"/>
       <line num="64" count="1" type="stmt"/>
-      <line num="65" count="5" type="stmt"/>
+      <line num="65" count="12" type="stmt"/>
     </file>
   </project>
 </coverage>
