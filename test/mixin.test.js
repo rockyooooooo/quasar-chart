@@ -1,5 +1,6 @@
 const { describe, test, expect } = require('@jest/globals')
-const { mixin, isObject } = require('./mixin')
+const { mixin, isObject } = require('../src/pages/mixin')
+// const { mixin, isObject } = require('./mixin')
 const { methods } = mixin
 const { transfer, aggregate } = methods
 

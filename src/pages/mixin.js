@@ -68,7 +68,7 @@ export const mixin = {
      * @returns {array}
      */
     aggregate (transferredData) {
-      if (!this.isObject(transferredData)) throw new TypeError('transferredData is not an object.')
+      if (!isObject(transferredData)) throw new TypeError('transferredData is not an object.')
       return Object.entries(transferredData)
         .map((firstTierBucket) => ([
           firstTierBucket[0],
@@ -121,14 +121,15 @@ export const mixin = {
         }
       })
       return newTimes
-    },
-    /**
-     * 描述 - 檢查變數是否為 object
-     * @param {any} obj - 想檢查是否為 object 的變數
-     * @returns {boolean}
-     */
-    isObject (obj) {
-      return Object.prototype.toString.call(obj) === '[object Object]'
     }
   }
+}
+
+/**
+ * 描述 - 檢查變數是否為 object
+ * @param {any} obj - 想檢查是否為 object 的變數
+ * @returns {boolean}
+ */
+export const isObject = (obj) => {
+  return Object.prototype.toString.call(obj) === '[object Object]'
 }

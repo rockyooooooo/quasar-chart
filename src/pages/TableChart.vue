@@ -2,6 +2,7 @@
   <div style="min-width: 500px; width: 800px; max-width: 90vw;">
     <p class="caption">Single File Upload</p>
     <q-uploader
+      id="uploader"
       :multiple="false"
       :url="''"
       :upload-factory="uploadFile"
@@ -9,23 +10,32 @@
     />
     <p class="caption">Type</p>
     <q-select
+      id="type-selector"
       v-model="type"
       :options="typeOptions"
       :disable="isTypeSelectDisabled"
     />
     <p class="caption">Granularity</p>
     <q-select
+      id="granularity-selector"
       v-model="granularity"
       :options="granularityOptions"
       :disable="isGranularitySelectDisabled"
     />
     <q-table
+      id="table"
       class="q-mt-lg"
       :data="dataForTable"
       :columns="columns"
       row-key="name"
     />
-    <q-btn @click="handleFlip" :disable="isFlipDisabled">Flip</q-btn>
+    <q-btn
+      id="flip-btn"
+      @click="handleFlip"
+      :disable="isFlipDisabled"
+    >
+    Flip
+    </q-btn>
   </div>
 </template>
 
@@ -117,15 +127,9 @@ export default {
   },
   watch: {
     type (value) {
-      console.log('type: ', value)
       this.isFlipped
         ? this.firstTier = value
         : this.secondTier = value
-      console.log('first tier: ', this.firstTier)
-      console.log('second tier: ', this.secondTier)
-    },
-    granularity (value) {
-      console.log('new granularity: ', value)
     }
   },
   mixins: [mixin],
@@ -224,9 +228,6 @@ export default {
       const temp = this.firstTier
       this.firstTier = this.secondTier
       this.secondTier = temp
-
-      console.log('first tier: ', this.firstTier)
-      console.log('second tier: ', this.secondTier)
     }
   }
 }

@@ -4,6 +4,7 @@
       Single File Upload
     </p>
     <q-uploader
+      id="uploader"
       :multiple="false"
       :url="''"
       :upload-factory="uploadFile"
@@ -11,18 +12,21 @@
     />
     <p class="caption">Granularity</p>
     <q-select
+      id="granularity-selector"
       v-model="granularity"
       :options="granularityOptions"
       :disable="isGranularitySelectDisabled"
     />
     <p class="caption">User</p>
     <q-select
+      id="user-selector"
       v-model="user"
       :options="userOptions"
       :disable="isUserSelectDisabled"
     />
     <p class="caption">Base date</p>
     <q-datetime
+      id="base-time-selector"
       v-model="baseTime"
       type="date"
       :display-value="baseTimeDisplayValue"
@@ -33,6 +37,7 @@
     />
     <p class="caption">Comparison date</p>
     <q-select
+      id="comparison-time-selector"
       v-model="comparisonTime"
       :options="validComparisonTimes"
       :disable="isComparisonTimesSelectDisabled"
@@ -71,9 +76,7 @@ export default {
       ],
       isGranularitySelectDisabled: true,
       baseTime: '',
-      comparisonTime: '',
-      selectedBaseTimes: [],
-      selectedComparisonTimes: [],
+      comparisonTime: [],
       isBaseTimeSelectDisabled: true,
       isComparisonTimesSelectDisabled: true
     }
@@ -105,7 +108,7 @@ export default {
       for (const key in transferredData) {
         secondTransferredData[key] = this.transfer(transferredData[key], this.secondTier)
       }
-      console.log('secondTransferredData: ', secondTransferredData)
+
       return this.aggregate(secondTransferredData)
     },
     granulatedData () {
@@ -135,7 +138,7 @@ export default {
     },
     validComparisonTimes () {
       const validComparisonTimes = []
-      if (this.baseDateIndex === 0) return validComparisonTimes
+      if (this.baseTimeIndex === 0) return validComparisonTimes
       for (let i = this.baseTimeIndex - this.range; i + this.range > 0; i -= this.range) {
         const endIndex = i + this.range - 1
         if (i < 0) i = 0
@@ -163,39 +166,43 @@ export default {
     }
   },
   watch: {
-    aggregatedData (value) {
-      console.log('aggregatedData: ', value)
-    },
+    // NOTE: 這個乍看之下是多餘的操作，目的是當 this.validComparisonTimes 改變，要更新 this.comparisonTime
+    // 而觸發 this.validComparisonTimes 改變的 dependencies 包含 this.inputData、this.granularity、this.user、this.baseTime
+    // 如果沒有這個 watcher，當重新選擇 user 或重新上傳 inputData 時，chart 雖然還在，但是 comparison date selector 會空掉
     validComparisonTimes (value) {
-      if (!this.comparisonTime.length || !this.validComparisonTimes.length) return
+      // if (!this.comparisonTime.length || !this.validComparisonTimes.length) return // NOTE: 好像是多餘的檢查
       const emptyData = { label: '', value: [] }
+      // NOTE: this.comparisonTime 是一個 array，e.g. ['2021-11-10', 6]，包含時間跟最後一筆要用到的 offset，所以要重新抓
+      // 可能原本的是 ['2021-11-10', 6]，granularity 更新後，變成 ['2021-11-10', 27]
       const foundComparisonTime = this.validComparisonTimes.find((item) => item.value[0] === this.comparisonTime[0]) || emptyData
       this.comparisonTime = foundComparisonTime.value
     },
     granularity (value) {
       d3.select('.chart').selectAll('*').remove()
 
-      if (!this.comparisonTime.length) return
-      const emptyData = { label: '', value: [] }
-      const foundComparisonTime = this.validComparisonTimes.find((item) => item.value[0] === this.comparisonTime[0]) || emptyData
-      this.comparisonTime = foundComparisonTime.value
+      // FIXME: 跟 validComparisonTimes watcher 重複了，應該可以留在 validComparisonTimes watcher 就好
+      // if (!this.comparisonTime.length) return // NOTE: 好像是多餘的檢查
+      // const emptyData = { label: '', value: [] }
+      // const foundComparisonTime = this.validComparisonTimes.find((item) => item.value[0] === this.comparisonTime[0]) || emptyData
+      // this.comparisonTime = foundComparisonTime.value
 
-      if (!value || !this.user || !this.baseTime || !this.comparisonTimes.length) return
+      if (!value || !this.user || !this.baseTime || !this.comparisonTime.length) return // comparisonTime 是個 array, e.g. ['2021-11-10', 6]
       this.renderBarChart(this.baseTimes, this.comparisonTimes)
     },
     user (value) {
       d3.select('.chart').selectAll('*').remove()
-      this.isBaseTimeSelectDisabled = false
 
-      if (!value || !this.baseTime || !this.comparisonTimes.length) return
+      if (value) this.isBaseTimeSelectDisabled = false
+
+      if (!value || !this.baseTime || !this.comparisonTime.length) return // comparisonTime 是個 array, e.g. ['2021-11-10', 6]
       this.renderBarChart(this.baseTimes, this.comparisonTimes)
     },
     baseTime (value) {
       d3.select('.chart').selectAll('*').remove()
-      this.isComparisonTimesSelectDisabled = false
+      if (value) this.isComparisonTimesSelectDisabled = false
     },
     comparisonTime (value) {
-      if (!value.length) return
+      if (!value.length) return // comparisonTime 是個 array, e.g. ['2021-11-10', 6]
       this.renderBarChart(this.baseTimes, this.comparisonTimes)
     }
   },
@@ -222,6 +229,7 @@ export default {
         this.isUserSelectDisabled = false
         Loading.hide()
       }
+
       reader.readAsText(file)
     },
     /**
@@ -264,7 +272,6 @@ export default {
       }
       this.user = this.users[0]
 
-      console.log('parsedData: ', parsedData)
       return parsedData
     },
     /**
@@ -286,6 +293,7 @@ export default {
      */
     renderBarChart (baseTimes, comparisonTimes) {
       d3.select('.chart').selectAll('*').remove()
+      // console.log('renderBarChart has been called')
 
       const margin = {
         top: 50,
@@ -321,7 +329,7 @@ export default {
       }
 
       const padDates = (dates, pushOrUnshift, granularity, length) => {
-        if (dates.length <= 0) return dates // watcher 似乎會把整個相關的 code 都跑一遍，所以一開始 dates 是空陣列就直接原封不動 return dates，才不會噴錯
+        // if (dates.length <= 0) return dates // watcher 似乎會把整個相關的 code 都跑一遍，所以一開始 dates 是空陣列就直接原封不動 return dates，才不會噴錯
         const paddedDates = dates.slice()
         // 相當之醜
         for (let i = pushOrUnshift === 'push' ? paddedDates.length - 1 : 0; paddedDates.length < length; pushOrUnshift === 'push' ? i++ : '') {
@@ -334,10 +342,16 @@ export default {
         return paddedDates
       }
 
+      // console.log('baseTimes: ', baseTimes)
+      // console.log('comparisonTimes: ', comparisonTimes)
       const paddedBaseTimes = padData(baseTimes, 'push', this.granularity, this.range)
       const paddedComparisonTimes = padData(comparisonTimes, 'unshift', this.granularity, this.range)
       const paddedBaseDates = padDates(this.baseDates, 'push', 60 * 24, WEEKDAYS)
       const paddedComparisonDates = padDates(this.comparisonDates, 'unshift', 60 * 24, WEEKDAYS)
+      // console.log('paddedBaseTimes: ', paddedBaseTimes)
+      // console.log('paddedComparisonTimes: ', paddedComparisonTimes)
+      // console.log('paddedBaseDates: ', paddedBaseDates)
+      // console.log('paddedComparisonDates: ', paddedComparisonDates)
       const growthRates = paddedBaseTimes.map((item, index) => [
         item[0],
         paddedComparisonTimes[index][1] === min // 檢查上週數據是否為最小值
@@ -346,6 +360,7 @@ export default {
             ? -100 // 這週數據是最小值，用 0 計算成長率(其實成長率就是 -100%)
             : Math.round(((item[1] - paddedComparisonTimes[index][1]) / paddedComparisonTimes[index][1]) * 100) // 這週數據不是最小值，計算成長率
       ])
+      // console.log('growthRates: ', growthRates)
 
       // the SVG
       const chart = d3.select('.chart')
