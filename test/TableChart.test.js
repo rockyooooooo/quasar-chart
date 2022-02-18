@@ -1,6 +1,6 @@
 const fs = require('fs')
 const fsPromises = fs.promises
-const { beforeAll, beforeEach, afterEach, describe, test, expect } = require('@jest/globals')
+const { beforeAll, beforeEach, afterEach, describe, test, expect, jest } = require('@jest/globals')
 import { mount, createLocalVue } from '@vue/test-utils'
 import Quasar, * as All from 'quasar'
 import TableChart from '../src/pages/TableChart.vue'
@@ -29,6 +29,12 @@ describe('uploader', () => {
 
   test('uploader 存在', () => {
     expect(uploader.exists()).toBe(true)
+  })
+
+  test('uploaded 有被呼叫', () => {
+    const fileReaderSpy = jest.spyOn(FileReader.prototype, 'readAsText').mockImplementation(() => null)
+    wrapper.vm.uploaded(null)
+    expect(fileReaderSpy).toBeCalled()
   })
 })
 

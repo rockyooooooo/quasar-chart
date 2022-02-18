@@ -31,6 +31,12 @@ describe('uploader', () => {
   test('uploader 存在', () => {
     expect(uploader.exists()).toBe(true)
   })
+
+  test('uploaded 有被呼叫', () => {
+    const fileReaderSpy = jest.spyOn(FileReader.prototype, 'readAsText').mockImplementation(() => null)
+    wrapper.vm.uploaded(null)
+    expect(fileReaderSpy).toBeCalled()
+  })
 })
 
 describe('granularity-selector', () => {
@@ -165,32 +171,6 @@ describe('comparison-time-selector', () => {
   })
 })
 
-// NOTE: 只要測試 renderBarChart 有被呼叫就好
-// describe('chart', () => {
-//   const chartWrapper = wrapper.find('.chart')
-
-//   test('chart 存在', () => {
-//     expect(chartWrapper.exists()).toBe(true)
-//   })
-
-//   test('granularity, user, baseTime, comparisonTime 都有後，chart 就會有內容', async () => {
-//     await wrapper.setData({
-//       baseTime: '2021-11-17',
-//       comparisonTime: ['2021-11-10', 6]
-//     })
-
-//     // NOTE: renderBarChart() 有被呼叫，但卻沒有畫出 chart
-//     await localVue.nextTick()
-//     console.log(chartWrapper.html())
-//     expect(chartWrapper.text()).not.toBe('')
-
-//     // await wrapper.setData({
-//     //   baseTime: '',
-//     //   comparisonTime: []
-//     // })
-//   })
-// })
-
 describe('renderBarChart', () => {
   describe('只有 granularity, user 時，不會呼叫 renderBarChart', () => {
     let spy = null
@@ -320,3 +300,29 @@ describe('renderBarChart', () => {
     })
   })
 })
+
+// NOTE: 只要測試 renderBarChart 有被呼叫就好
+// describe('chart', () => {
+//   const chartWrapper = wrapper.find('.chart')
+
+//   test('chart 存在', () => {
+//     expect(chartWrapper.exists()).toBe(true)
+//   })
+
+//   test('granularity, user, baseTime, comparisonTime 都有後，chart 就會有內容', async () => {
+//     await wrapper.setData({
+//       baseTime: '2021-11-17',
+//       comparisonTime: ['2021-11-10', 6]
+//     })
+
+//     // NOTE: renderBarChart() 有被呼叫，但卻沒有畫出 chart
+//     await localVue.nextTick()
+//     console.log(chartWrapper.html())
+//     expect(chartWrapper.text()).not.toBe('')
+
+//     // await wrapper.setData({
+//     //   baseTime: '',
+//     //   comparisonTime: []
+//     // })
+//   })
+// })

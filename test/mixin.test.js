@@ -1,8 +1,7 @@
 const { describe, test, expect } = require('@jest/globals')
 const { mixin, isObject } = require('../src/pages/mixin')
-// const { mixin, isObject } = require('./mixin')
 const { methods } = mixin
-const { transfer, aggregate } = methods
+const { transfer, aggregate, granulateTimes } = methods
 
 describe('transfer', () => {
   const data = [
@@ -12,69 +11,81 @@ describe('transfer', () => {
     ['2021-11-01 00:10:00', '%user-0', 'i:145.215.142.148', '%Mauritania', '%台灣大哥大', '200950714'],
     ['2021-11-01 00:15:00', '%user-3', 'i:230.79.17.46', '%Pitcairn', '%Facebook', '265328613']
   ]
-  describe('合法輸入', () => {
-    test('傳入正常 input，得到物件', () => {
-      expect(transfer(data, 'times')).toBeInstanceOf(Object)
-      expect(transfer(data, 'users')).toBeInstanceOf(Object)
-      expect(transfer(data, 'nations')).toBeInstanceOf(Object)
-      expect(transfer(data, 'otts')).toBeInstanceOf(Object)
+
+  test('傳入正常 input，得到預期物件', () => {
+    expect(transfer(data, 'times')).toEqual({
+      '2021-11-01 00:00:00': expect.any(Array),
+      '2021-11-01 00:05:00': expect.any(Array),
+      '2021-11-01 00:10:00': expect.any(Array),
+      '2021-11-01 00:15:00': expect.any(Array)
     })
-    test('傳入正常 input，得到預期物件', () => {
-      expect(transfer(data, 'times')).toEqual({
-        '2021-11-01 00:00:00': expect.any(Array),
-        '2021-11-01 00:05:00': expect.any(Array),
-        '2021-11-01 00:10:00': expect.any(Array),
-        '2021-11-01 00:15:00': expect.any(Array)
-      })
-      expect(transfer(data, 'users')).toEqual({
-        '%user-5': expect.any(Array),
-        '%user-9': expect.any(Array),
-        '%user-0': expect.any(Array),
-        '%user-3': expect.any(Array)
-      })
-      expect(transfer(data, 'nations')).toEqual({
-        '%Dominica': expect.any(Array),
-        '%Panama': expect.any(Array),
-        '%Somalia': expect.any(Array),
-        '%Mauritania': expect.any(Array),
-        '%Pitcairn': expect.any(Array)
-      })
-      expect(transfer(data, 'otts')).toEqual({
-        '%百度': expect.any(Array),
-        '%NetFlix': expect.any(Array),
-        '%京東': expect.any(Array),
-        '%台灣大哥大': expect.any(Array),
-        '%Facebook': expect.any(Array)
-      })
+    expect(transfer(data, 'users')).toEqual({
+      '%user-5': expect.any(Array),
+      '%user-9': expect.any(Array),
+      '%user-0': expect.any(Array),
+      '%user-3': expect.any(Array)
     })
-    test('傳入空陣列跟空字串回傳空物件', () => {
-      expect(transfer([], '')).toEqual({})
+    expect(transfer(data, 'nations')).toEqual({
+      '%Dominica': expect.any(Array),
+      '%Panama': expect.any(Array),
+      '%Somalia': expect.any(Array),
+      '%Mauritania': expect.any(Array),
+      '%Pitcairn': expect.any(Array)
     })
-    test('傳入的陣列的每個 record 的長度不足，不影響執行', () => {
-      const newData = data.map((record) => record.filter((item, index) => index < 5))
-      expect(transfer(newData, 'times')).toEqual({
-        '2021-11-01 00:00:00': expect.any(Array),
-        '2021-11-01 00:05:00': expect.any(Array),
-        '2021-11-01 00:10:00': expect.any(Array),
-        '2021-11-01 00:15:00': expect.any(Array)
-      })
+    expect(transfer(data, 'otts')).toEqual({
+      '%百度': expect.any(Array),
+      '%NetFlix': expect.any(Array),
+      '%京東': expect.any(Array),
+      '%台灣大哥大': expect.any(Array),
+      '%Facebook': expect.any(Array)
     })
   })
-  describe('非法輸入', () => {
-    test('傳入 null 會 throw TypeError', () => {
-      expect(() => transfer(null, 'users')).toThrow(TypeError)
-    })
-    test('傳入 undefined 會 throw TypeError', () => {
-      expect(() => transfer(undefined, 'users')).toThrow(TypeError)
-    })
-    test('傳入 object 會 throw TypeError', () => {
-      expect(() => transfer({}, 'users')).toThrow(TypeError)
-    })
+
+  test('傳入空陣列回傳空物件', () => {
+    expect(transfer([], 'times')).toEqual({})
+    expect(transfer([], 'users')).toEqual({})
+    expect(transfer([], 'nations')).toEqual({})
+    expect(transfer([], 'otts')).toEqual({})
+  })
+
+  test('傳入的 data 非 array 會 throw TypeError', () => {
+    expect(() => transfer(null, 'users')).toThrow(TypeError)
+    expect(() => transfer(undefined, 'users')).toThrow(TypeError)
+    expect(() => transfer({}, 'users')).toThrow(TypeError)
+    expect(() => transfer(1, 'users')).toThrow(TypeError)
+    expect(() => transfer('1', 'users')).toThrow(TypeError)
+    expect(() => transfer(true, 'users')).toThrow(TypeError)
+  })
+
+  test("傳入的 type 不是 'times', 'users', 'nations', 'otts' 其中一個，會 throw Error", () => {
+    expect(() => transfer(data, 'test')).toThrowError("type must be one of 'times', 'users', 'nations', 'otts'")
+    expect(() => transfer(data, '')).toThrowError("type must be one of 'times', 'users', 'nations', 'otts'")
+    expect(() => transfer(data, 100)).toThrowError("type must be one of 'times', 'users', 'nations', 'otts'")
+    expect(() => transfer(data, [])).toThrowError("type must be one of 'times', 'users', 'nations', 'otts'")
+    expect(() => transfer(data, {})).toThrowError("type must be one of 'times', 'users', 'nations', 'otts'")
+    expect(() => transfer(data, null)).toThrowError("type must be one of 'times', 'users', 'nations', 'otts'")
+    expect(() => transfer(data, undefined)).toThrowError("type must be one of 'times', 'users', 'nations', 'otts'")
+  })
+})
+
+describe('isObject', () => {
+  test('物件 -> true', () => {
+    expect(isObject({})).toBe(true)
+  })
+
+  test('非物件 -> false', () => {
+    expect(isObject([])).toBe(false)
+    expect(isObject(123)).toBe(false)
+    expect(isObject('123')).toBe(false)
+    expect(isObject(NaN)).toBe(false)
+    expect(isObject(true)).toBe(false)
+    expect(isObject(null)).toBe(false)
+    expect(isObject(undefined)).toBe(false)
   })
 })
 
 describe('aggregate', () => {
-  const data = {
+  const data1 = {
     '%user-0': {
       '2021-11-01 00:00:00': [
         ['2021-11-01 00:00:00', '%user-0', 'i:142.248.197.185', '%Chile', '%百度', '201347134']
@@ -107,68 +118,144 @@ describe('aggregate', () => {
       ]
     }
   }
-  describe('合法輸入', () => {
-    test('傳入正常物件，得到陣列', () => {
-      expect(aggregate(data)).toBeInstanceOf(Array)
-    })
-    test('傳入正常物件，得到預期陣列', () => {
-      expect(aggregate(data)).toEqual([
-        ['%user-0', [
-          ['2021-11-01 00:00:00', 201347134],
-          ['2021-11-01 00:05:00', 20118528],
-          ['2021-11-01 00:10:00', 200950714 + 166262990]
-        ]],
-        ['%user-1', [
-          ['2021-11-01 00:00:00', 234012249],
-          ['2021-11-01 00:10:00', 89999228],
-          ['2021-11-01 00:15:00', 236846183]
-        ]],
-        ['%user-2', [
-          ['2021-11-01 00:05:00', 116496198],
-          ['2021-11-01 00:15:00', 10113662]
-        ]]
-      ])
-    })
-    test('傳入空物件，得到空陣列', () => {
-      expect(aggregate({})).toEqual([])
-    })
+  const data2 = {
+    '%Afghanistan': {
+      '2021-11-01 00:00:00': [
+        ['2021-11-01 00:00:00', '%user-4', 'i:141.13.152.234', '%Afghanistan', '%騰訊', '124363997']
+      ],
+      '2021-11-01 00:30:00': [
+        ['2021-11-01 00:30:00', '%user-3', 'i:124.239.21.187', '%Afghanistan', '%Microsoft', '37163170']
+      ]
+    },
+    '%Andorra': {
+      '2021-11-01 00:05:00': [
+        ['2021-11-01 00:05:00', '%user-2', 'i:122.24.169.42', '%Andorra', '%京東', '116496198'],
+        ['2021-11-01 00:05:00', '%user-2', 'i:182.96.84.200', '%Andorra', '%NetFlix', '135614162']
+      ],
+      '2021-11-01 00:25:00': [
+        ['2021-11-01 00:25:00', '%user-7', 'i:152.198.148.149', '%Andorra', '%淘寶', '245752753'],
+        ['2021-11-01 00:25:00', '%user-0', 'i:123.231.97.57', '%Andorra', '%Vimeo', '175469537'],
+        ['2021-11-01 00:25:00', '%user-6', 'i:116.4.12.2', '%Andorra', '%淘寶', '254612248']
+      ]
+    }
+  }
+
+  test('傳入正常物件，得到預期陣列', () => {
+    expect(aggregate(data1)).toEqual([
+      ['%user-0', [
+        ['2021-11-01 00:00:00', 201347134],
+        ['2021-11-01 00:05:00', 20118528],
+        ['2021-11-01 00:10:00', 200950714 + 166262990]
+      ]],
+      ['%user-1', [
+        ['2021-11-01 00:00:00', 234012249],
+        ['2021-11-01 00:10:00', 89999228],
+        ['2021-11-01 00:15:00', 236846183]
+      ]],
+      ['%user-2', [
+        ['2021-11-01 00:05:00', 116496198],
+        ['2021-11-01 00:15:00', 10113662]
+      ]]
+    ])
+
+    expect(aggregate(data2)).toEqual([
+      ['%Afghanistan', [
+        ['2021-11-01 00:00:00', 124363997],
+        ['2021-11-01 00:30:00', 37163170]
+      ]],
+      ['%Andorra', [
+        ['2021-11-01 00:05:00', 116496198 + 135614162],
+        ['2021-11-01 00:25:00', 245752753 + 175469537 + 254612248]
+      ]]
+    ])
   })
-  describe('非法輸入', () => {
-    test('傳入 null 會 throw TypeError', () => {
-      expect(() => aggregate(null)).toThrow(TypeError)
-    })
-    test('傳入 undefined 會 throw TypeError', () => {
-      expect(() => aggregate(undefined)).toThrow(TypeError)
-    })
-    test('傳入 array 會 throw TypeError', () => {
-      expect(() => aggregate([])).toThrow(TypeError)
-    })
+
+  test('傳入空物件，得到空陣列', () => {
+    expect(aggregate({})).toEqual([])
+  })
+
+  test('transferredData 不是傳入物件，會 throw TypeError', () => {
+    expect(() => aggregate(null)).toThrow(TypeError)
+    expect(() => aggregate(undefined)).toThrow(TypeError)
+    expect(() => aggregate([])).toThrow(TypeError)
+    expect(() => aggregate(100)).toThrow(TypeError)
+    expect(() => aggregate('test')).toThrow(TypeError)
+    expect(() => aggregate(true)).toThrow(TypeError)
+    expect(() => aggregate(false)).toThrow(TypeError)
   })
 })
 
-describe('isObject', () => {
-  test('物件 -> true', () => {
-    expect(isObject({})).toBe(true)
+describe('granulateTimes', () => {
+  const times = [
+    '2021-11-01 00:00:00',
+    '2021-11-01 00:05:00',
+    '2021-11-01 00:10:00',
+    '2021-11-01 00:15:00',
+    '2021-11-01 00:20:00',
+    '2021-11-01 00:25:00',
+    '2021-11-01 00:30:00',
+    '2021-11-01 00:35:00',
+    '2021-11-01 00:40:00',
+    '2021-11-01 00:45:00',
+    '2021-11-01 00:50:00',
+    '2021-11-01 00:55:00',
+    '2021-11-01 01:00:00',
+    '2021-11-01 01:05:00',
+    '2021-11-01 01:10:00',
+    '2021-11-01 01:15:00',
+    '2021-11-01 01:20:00',
+    '2021-11-01 01:25:00',
+    '2021-11-01 01:30:00',
+    '2021-11-01 01:35:00',
+    '2021-11-01 01:40:00',
+    '2021-11-01 01:45:00',
+    '2021-11-01 01:50:00',
+    '2021-11-01 01:55:00'
+  ]
+
+  describe('granularity 是整數', () => {
+    test('granularity 是 5 mins', () => {
+      expect(granulateTimes(times, 5).length).toBe(24)
+    })
+
+    test('granularity 是 30 mins', () => {
+      expect(granulateTimes(times, 30).length).toBe(4)
+    })
+
+    test('granularity 是 1 hr', () => {
+      expect(granulateTimes(times, 60).length).toBe(2)
+    })
   })
-  test('陣列 -> false', () => {
-    expect(isObject([])).toBe(false)
+
+  describe('granularity 不是整數', () => {
+    test('granularity 傳入 5.12', () => {
+      expect(granulateTimes(times, 5.12).length).toBe(24)
+    })
+
+    test('granularity 傳入 30.12', () => {
+      expect(granulateTimes(times, 30.12).length).toBe(4)
+    })
+
+    test('granularity 傳入 60.12', () => {
+      expect(granulateTimes(times, 60.12).length).toBe(2)
+    })
   })
-  test('數字 -> false', () => {
-    expect(isObject(123)).toBe(false)
+
+  test('times 傳入空陣列, 回傳空陣列', () => {
+    expect(granulateTimes([], 5)).toEqual([])
   })
-  test('字串 -> false', () => {
-    expect(isObject('123')).toBe(false)
+
+  test('times 傳入非 array 會 throw TypeError', () => {
+    expect(() => granulateTimes({}, 5)).toThrow(TypeError)
+    expect(() => granulateTimes(null, 5)).toThrow(TypeError)
+    expect(() => granulateTimes(undefined, 5)).toThrow(TypeError)
+    expect(() => granulateTimes(100, 5)).toThrow(TypeError)
+    expect(() => granulateTimes('100', 5)).toThrow(TypeError)
+    expect(() => granulateTimes(true, 5)).toThrow(TypeError)
   })
-  test('NaN -> false', () => {
-    expect(isObject(NaN)).toBe(false)
-  })
-  test('布林 -> false', () => {
-    expect(isObject(true)).toBe(false)
-  })
-  test('null -> false', () => {
-    expect(isObject(null)).toBe(false)
-  })
-  test('undefined -> false', () => {
-    expect(isObject(undefined)).toBe(false)
+
+  test('granularity 傳入小於或等於 0 的數字會 throw Error', () => {
+    expect(() => granulateTimes(times, 0)).toThrowError('granularity must be greater than 0')
+    expect(() => granulateTimes(times, -1)).toThrowError('granularity must be greater than 0')
   })
 })
