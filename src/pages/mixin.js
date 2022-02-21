@@ -143,6 +143,7 @@ export const mixin = {
     /**
      * 描述
      * @param {object} transferredData - Expected data that has been transferred twice.
+     * @param {number} granularity - The user-selected granularity, in minute. Expect 5, 30, 60, 60 * 3, 60 * 6 and 60 * 24.
      * @returns {array}
      * @example
      * input:
@@ -179,12 +180,13 @@ export const mixin = {
      *       ]
      *     }
      *   }
+     *   granularity = 5
      * output:
      *   aggregatedData = [
      *     ['%user-0', [
      *       ['2021-11-01 00:00:00', 201347134],
      *       ['2021-11-01 00:05:00', 20118528],
-     *       ['2021-11-01 00:10:00', 200950714 + 166262990]
+     *       ['2021-11-01 00:10:00', 367213704] // 200950714 + 166262990
      *     ]],
      *     ['%user-1', [
      *       ['2021-11-01 00:00:00', 234012249],
@@ -197,19 +199,27 @@ export const mixin = {
      *     ]]
      *   ]
      */
-    aggregate (transferredData) {
+    aggregate (transferredData, granularity = 5) {
       if (!isObject(transferredData)) throw new TypeError('transferredData is not an object.')
       return Object.entries(transferredData)
-        .map((firstTierBucket) => ([
-          firstTierBucket[0],
-          Object.entries(firstTierBucket[1])
+        .map((firstTierBucket) => {
+          // TODO: bps 計算方式應該還可以改善
+          const totalBits = Object.entries(firstTierBucket[1])
             .map((secondTierBucket) => ([
               secondTierBucket[0],
               secondTierBucket[1].reduce((acc, cur) => {
-                return acc + Number(cur[cur.length - 1])
+                return acc + (Number(cur[cur.length - 1]) * 5 * 60)
               }, 0)
             ]))
-        ]))
+          const bps = totalBits.map((secondTierBucket) => [
+            secondTierBucket[0],
+            Math.round(secondTierBucket[1] / (granularity * 60))
+          ])
+          return [
+            firstTierBucket[0],
+            bps
+          ]
+        })
     },
     /**
      * 描述 - times 在 second tier，在 aggregate 後做 granulate
@@ -249,17 +259,25 @@ export const mixin = {
         const arr = this.times.map((time) => [time, 0])
         let index = 0
 
+        // TODO: bps 計算方式應該還可以改善
+        const totalBits = firstTierBucket[1].reduce((acc, secondTierBucket) => {
+          let timeGap = new Date(secondTierBucket[0]) - new Date(arr[index][0])
+          // 當 timeGap 大等於 granularity 時就把 index + 1，並更新 timeGap，直到 timeGap 小於 granularity
+          while (timeGap >= granularity * 60 * 1000) {
+            timeGap = new Date(secondTierBucket[0]) - new Date(arr[++index][0])
+          }
+          arr[index][1] += (secondTierBucket[1] * 5 * 60)
+          return arr
+        }, arr)
+
+        const bps = totalBits.map((secondTierBucket) => [
+          secondTierBucket[0],
+          Math.round(secondTierBucket[1] / (granularity * 60))
+        ])
+
         return [
           firstTierBucket[0],
-          firstTierBucket[1].reduce((acc, secondTierBucket) => {
-            let timeGap = new Date(secondTierBucket[0]) - new Date(arr[index][0])
-            // 當 timeGap 大等於 granularity 時就把 index + 1，並更新 timeGap，直到 timeGap 小於 granularity
-            while (timeGap >= granularity * 60 * 1000) {
-              timeGap = new Date(secondTierBucket[0]) - new Date(arr[++index][0])
-            }
-            arr[index][1] += secondTierBucket[1]
-            return arr
-          }, arr)
+          bps
         ]
       })
     },

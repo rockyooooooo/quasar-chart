@@ -96,7 +96,7 @@ export default {
       let aggregatedAndGranulatedData = []
       if (this.firstTier === 'times') {
         const granulatedData = this.granulateTransferredData(this.transferredData, this.granularity)
-        aggregatedAndGranulatedData = this.aggregate(granulatedData)
+        aggregatedAndGranulatedData = this.aggregate(granulatedData, this.granularity)
       }
       if (this.secondTier === 'times') {
         const aggregatedData = this.aggregate(this.transferredData)
@@ -213,11 +213,22 @@ export default {
      * @returns {array}
      */
     transferForTable (data) {
+      const formatBps = (d) => {
+        let remainder = d
+        let counter = 0
+        while (remainder > 1024) {
+          remainder = Math.round(remainder / 1024)
+          counter++
+        }
+        const units = ['b/s', 'Kb/s', 'Mb/s', 'Gb/s']
+        return remainder + units[counter]
+      }
+
       return data.map((firstTierBucket) => {
         const row = Array(this[this.secondTier].length).fill(0)
         firstTierBucket[1].forEach((secondTierBucket) => {
           const index = this[this.secondTier].indexOf(secondTierBucket[0])
-          row[index] += secondTierBucket[1]
+          row[index] = formatBps(secondTierBucket[1])
         })
         row.push(firstTierBucket[0])
         return row

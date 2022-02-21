@@ -297,11 +297,11 @@ export default {
 
       const margin = {
         top: 50,
-        right: 40,
+        right: 60,
         bottom: 50,
-        left: 40
+        left: 60
       }
-      const chartWidth = 880 - margin.left - margin.right
+      const chartWidth = 920 - margin.left - margin.right
       const chartHeight = 600 - margin.top - margin.bottom
       const barWidth = 50 / this.partitionsPerDay
 
@@ -393,11 +393,11 @@ export default {
         .tickFormat((d) => {
           let remainder = d
           let counter = 0
-          while (remainder > 1000) {
-            remainder /= 1000
+          while (remainder > 1024) {
+            remainder = Math.round(remainder / 1024)
             counter++
           }
-          const units = ['', 'k', 'm', 'b']
+          const units = ['b/s', 'Kb/s', 'Mb/s', 'Gb/s']
           return remainder + units[counter]
         })
       const rateYAxis = d3.axisRight(rateYLinear)
