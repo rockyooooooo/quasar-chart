@@ -46,12 +46,10 @@ describe('granularity-selector', () => {
     expect(granularitySelectorWrapper.exists()).toBe(true)
   })
 
-  // NOTE: 不必要的 test case？
   test('granularity-selector 初始值為 1 day', () => {
     expect(granularitySelectorWrapper.find('.q-input-target').text()).toBe('1 day')
   })
 
-  // NOTE: 不必要的 test case？
   test('點擊 granularity-selector 時，下拉選單包含 3 hrs、6 hrs、1 day', async () => {
     await granularitySelectorWrapper.trigger('click')
 
@@ -112,7 +110,6 @@ describe('base-time-selector', () => {
     expect(baseTimeSelectorWrapper.exists()).toBe(true)
   })
 
-  // NOTE: 不知道有沒有更好的測試方法
   test('baseTime 設定為 2021-11-17 時，base-time-selector 顯示 2021-11-17 ~ 2021-11-23', async () => {
     const baseTime = '2021-11-17'
     await wrapper.setData({ baseTime })
@@ -300,29 +297,3 @@ describe('renderBarChart', () => {
     })
   })
 })
-
-// NOTE: 只要測試 renderBarChart 有被呼叫就好
-// describe('chart', () => {
-//   const chartWrapper = wrapper.find('.chart')
-
-//   test('chart 存在', () => {
-//     expect(chartWrapper.exists()).toBe(true)
-//   })
-
-//   test('granularity, user, baseTime, comparisonTime 都有後，chart 就會有內容', async () => {
-//     await wrapper.setData({
-//       baseTime: '2021-11-17',
-//       comparisonTime: ['2021-11-10', 6]
-//     })
-
-//     // NOTE: renderBarChart() 有被呼叫，但卻沒有畫出 chart
-//     await localVue.nextTick()
-//     console.log(chartWrapper.html())
-//     expect(chartWrapper.text()).not.toBe('')
-
-//     // await wrapper.setData({
-//     //   baseTime: '',
-//     //   comparisonTime: []
-//     // })
-//   })
-// })

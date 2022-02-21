@@ -65,7 +65,7 @@ export const mixin = {
     /**
      * 描述 - times 在 first tier，在 second transfer 後 granulate
      * @param {object} transferredData - Expect data that has been transferred twice.
-     * @param {number} granularity - The user-selected granularity, in minute.
+     * @param {number} granularity - The user-selected granularity, in minute. Expect 5, 30, 60, 60 * 3, 60 * 6 and 60 * 24.
      * @returns {object}
      * @example
      * input:
@@ -214,7 +214,7 @@ export const mixin = {
     /**
      * 描述 - times 在 second tier，在 aggregate 後做 granulate
      * @param {array} aggregatedData - The aggregatedData.
-     * @param {number} granularity - The user-selected granularity, in minute.
+     * @param {number} granularity - The user-selected granularity, in minute.  Expect 5, 30, 60, 60 * 3, 60 * 6 and 60 * 24.
      * @returns {array}
      * @example
      * input:
@@ -266,7 +266,7 @@ export const mixin = {
     /**
      * 描述
      * @param {array} times - All value of the time field of the parsedData.
-     * @param {number} granularity - The user-selected granularity, in minute.
+     * @param {number} granularity - The user-selected granularity, in minute.  Expect 5, 30, 60, 60 * 3, 60 * 6 and 60 * 24.
      * @returns {array}
      * @example
      * input:
@@ -323,7 +323,7 @@ export const mixin = {
 
 /**
  * 描述 - 檢查變數是否為 object
- * @param {any} item - 任何想檢查是否為 object 的變數
+ * @param {any} item - 任何想檢查是否為 object 的東西
  * @returns {boolean}
  */
 export const isObject = (item) => {
