@@ -120,7 +120,17 @@ export default {
         name: field,
         label: field,
         sortable: true,
-        field: (item) => item[index] // note: 如果 dataset 是物件，這邊可以直接放 key，就會找到對應的 value，就不用為了轉成 array 又要對齊 column 的位置。但是這樣 datasetForTable 會不知道怎麼做。
+        field: (item) => item[index], // note: 如果 dataset 是物件，這邊可以直接放 key，就會找到對應的 value，就不用為了轉成 array 又要對齊 column 的位置。但是這樣 datasetForTable 會不知道怎麼做。
+        format: (value) => {
+          let remainder = value
+          let counter = 0
+          while (remainder > 1024) {
+            remainder = Math.round(remainder / 1024)
+            counter++
+          }
+          const units = ['b/s', 'Kb/s', 'Mb/s', 'Gb/s']
+          return remainder + units[counter]
+        }
       }))
       return columns
     }
@@ -213,22 +223,11 @@ export default {
      * @returns {array}
      */
     transferForTable (data) {
-      const formatBps = (d) => {
-        let remainder = d
-        let counter = 0
-        while (remainder > 1024) {
-          remainder = Math.round(remainder / 1024)
-          counter++
-        }
-        const units = ['b/s', 'Kb/s', 'Mb/s', 'Gb/s']
-        return remainder + units[counter]
-      }
-
       return data.map((firstTierBucket) => {
         const row = Array(this[this.secondTier].length).fill(0)
         firstTierBucket[1].forEach((secondTierBucket) => {
           const index = this[this.secondTier].indexOf(secondTierBucket[0])
-          row[index] = formatBps(secondTierBucket[1])
+          row[index] = secondTierBucket[1]
         })
         row.push(firstTierBucket[0])
         return row
