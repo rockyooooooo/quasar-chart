@@ -13,14 +13,12 @@
       id="type-selector"
       v-model="type"
       :options="typeOptions"
-      :disable="isTypeSelectDisabled"
     />
     <p class="caption">Granularity</p>
     <q-select
       id="granularity-selector"
       v-model="granularity"
       :options="granularityOptions"
-      :disable="isGranularitySelectDisabled"
     />
     <q-table
       id="table"
@@ -32,7 +30,6 @@
     <q-btn
       id="flip-btn"
       @click="handleFlip"
-      :disable="isFlipDisabled"
     >
     Flip
     </q-btn>
@@ -40,7 +37,7 @@
 </template>
 
 <script>
-import { Loading } from 'quasar'
+// import { Loading } from 'quasar'
 import { mixin } from './mixin'
 
 export default {
@@ -76,54 +73,54 @@ export default {
     }
   },
   computed: {
-    parsedData () {
-      return this.parseData(this.inputData)
-    },
-    transferredData () {
-      if (!this.parsedData.length) return
-      const transferredData = this.transfer(this.parsedData, this.firstTier)
+    // parsedData () {
+    //   return this.parseData(this.inputData)
+    // },
+    // transferredData () {
+    //   if (!this.parsedData.length) return
+    //   const transferredData = this.transfer(this.parsedData, this.firstTier)
 
-      const secondTransferredData = {}
-      for (const key in transferredData) {
-        secondTransferredData[key] = this.transfer(transferredData[key], this.secondTier)
-      }
-      return secondTransferredData
-    },
-    times () {
-      return this.granulateTimes(this.allTimes, this.granularity)
-    },
-    dataForTable () {
-      let aggregatedAndGranulatedData = []
-      if (this.firstTier === 'times') {
-        const granulatedData = this.granulateTransferredData(this.transferredData, this.granularity)
-        aggregatedAndGranulatedData = this.aggregate(granulatedData)
-      }
-      if (this.secondTier === 'times') {
-        const aggregatedData = this.aggregate(this.transferredData)
-        aggregatedAndGranulatedData = this.granulateAggregatedData(aggregatedData, this.granularity)
-      }
+    //   const secondTransferredData = {}
+    //   for (const key in transferredData) {
+    //     secondTransferredData[key] = this.transfer(transferredData[key], this.secondTier)
+    //   }
+    //   return secondTransferredData
+    // },
+    // times () {
+    //   return this.granulateTimes(this.allTimes, this.granularity)
+    // },
+    // dataForTable () {
+    //   let aggregatedAndGranulatedData = []
+    //   if (this.firstTier === 'times') {
+    //     const granulatedData = this.granulateTransferredData(this.transferredData, this.granularity)
+    //     aggregatedAndGranulatedData = this.aggregate(granulatedData)
+    //   }
+    //   if (this.secondTier === 'times') {
+    //     const aggregatedData = this.aggregate(this.transferredData)
+    //     aggregatedAndGranulatedData = this.granulateAggregatedData(aggregatedData, this.granularity)
+    //   }
 
-      return this.transferForTable(aggregatedAndGranulatedData)
-    },
-    columns () {
-      if (!this.parsedData.length) return []
-      const columnsValue = this[this.secondTier]
+    //   return this.transferForTable(aggregatedAndGranulatedData)
+    // },
+    // columns () {
+    //   if (!this.parsedData.length) return []
+    //   const columnsValue = this[this.secondTier]
 
-      const columns = []
-      columns.push({
-        name: this.firstTier,
-        label: this.firstTier + ' / ' + this.secondTier,
-        field: (item) => item[item.length - 1],
-        align: 'center'
-      })
-      columnsValue.forEach((field, index) => columns.push({
-        name: field,
-        label: field,
-        sortable: true,
-        field: (item) => item[index] // note: 如果 dataset 是物件，這邊可以直接放 key，就會找到對應的 value，就不用為了轉成 array 又要對齊 column 的位置。但是這樣 datasetForTable 會不知道怎麼做。
-      }))
-      return columns
-    }
+    //   const columns = []
+    //   columns.push({
+    //     name: this.firstTier,
+    //     label: this.firstTier + ' / ' + this.secondTier,
+    //     field: (item) => item[item.length - 1],
+    //     align: 'center'
+    //   })
+    //   columnsValue.forEach((field, index) => columns.push({
+    //     name: field,
+    //     label: field,
+    //     sortable: true,
+    //     field: (item) => item[index] // note: 如果 dataset 是物件，這邊可以直接放 key，就會找到對應的 value，就不用為了轉成 array 又要對齊 column 的位置。但是這樣 datasetForTable 會不知道怎麼做。
+    //   }))
+    //   return columns
+    // }
   },
   watch: {
     type (value) {
@@ -135,23 +132,65 @@ export default {
   mixins: [mixin],
   methods: {
     uploadFile (file, updateProgress) {
-      Loading.show()
+      // Loading.show()
       return new Promise((resolve, reject) => {
         resolve(file)
       })
     },
-    uploaded (file) {
-      const reader = new FileReader()
+    async uploaded (file) {
+      console.time('upload')
+      // NOTE: async version
+      const stream = file.stream()
+      const reader = stream.getReader()
+      let result = []
 
-      reader.onload = (evt) => {
-        this.inputData = evt.target.result
-
-        this.isTypeSelectDisabled = false
-        this.isGranularitySelectDisabled = false
-        this.isFlipDisabled = false
-        Loading.hide()
+      const handleChunk = async (buffer) => {
+        const blob = new Blob([buffer])
+        const text = await blob.text()
+        result.push(text)
       }
-      reader.readAsText(file)
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        handleChunk(value)
+      }
+
+      setTimeout(() => {
+        console.log(result)
+        console.timeEnd('upload')
+      }, 0)
+
+      // NOTE: .then version, hard to read (for me)
+      // const stream = file.stream()
+      // const reader = stream.getReader()
+      // let result = []
+      // reader.read().then(function processText ({ done, value }) {
+      //   if (done) {
+      //     console.log('stream complete')
+      //     console.log('result: ', result)
+      //     return
+      //   }
+
+      //   const chunk = value
+      //   result.push(chunk)
+      //   console.log({ chunk })
+      //   // Read some more, and call this function again
+      //   return reader.read().then(processText)
+      // })
+
+      // NOTE: FileReader version, has memory problem
+      // const reader = new FileReader()
+
+      // reader.onload = (evt) => {
+      //   this.inputData = evt.target.result
+
+      //   this.isTypeSelectDisabled = false
+      //   this.isGranularitySelectDisabled = false
+      //   this.isFlipDisabled = false
+      //   Loading.hide()
+      // }
+      // reader.readAsText(file)
     },
     /**
      * 描述

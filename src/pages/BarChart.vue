@@ -15,14 +15,12 @@
       id="granularity-selector"
       v-model="granularity"
       :options="granularityOptions"
-      :disable="isGranularitySelectDisabled"
     />
     <p class="caption">User</p>
     <q-select
       id="user-selector"
       v-model="user"
       :options="userOptions"
-      :disable="isUserSelectDisabled"
     />
     <p class="caption">Base date</p>
     <q-datetime
@@ -33,14 +31,12 @@
       :default-value="minBaseTime"
       :min="minBaseTime"
       :max="maxBaseTime"
-      :disable="isBaseTimeSelectDisabled"
     />
     <p class="caption">Comparison date</p>
     <q-select
       id="comparison-time-selector"
       v-model="comparisonTime"
       :options="validComparisonTimes"
-      :disable="isComparisonTimesSelectDisabled"
     />
     <div class="chart-container">
       <svg class="chart" />
@@ -49,7 +45,7 @@
 </template>
 
 <script>
-import { Loading } from 'quasar'
+// import { Loading } from 'quasar'
 import * as d3 from 'd3'
 import moment from 'moment'
 import { mixin } from './mixin'
@@ -209,28 +205,49 @@ export default {
   mixins: [mixin],
   methods: {
     uploadFile (file, updateProgress) {
-      Loading.show()
+      // Loading.show()
       return new Promise((resolve, reject) => {
         resolve(file)
       })
     },
-    uploaded (file) {
-      const reader = new FileReader()
+    async uploaded (file) {
+      const stream = file.stream()
+      const reader = stream.getReader()
+      let result = []
 
-      reader.onload = (evt) => {
-        // reset
-        this.allTimes = []
-        this.users = []
-        this.userOptions = []
-
-        this.inputData = evt.target.result
-
-        this.isGranularitySelectDisabled = false
-        this.isUserSelectDisabled = false
-        Loading.hide()
+      const handleChunk = async (buffer) => {
+        const blob = new Blob([buffer])
+        const text = await blob.text()
+        const parsedData = this.parseData(text)
+          .filter((record) => record[1] === this.user)
+        result.push(...parsedData)
       }
 
-      reader.readAsText(file)
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        await handleChunk(value)
+      }
+
+      console.log(result)
+
+      // NOTE: original version
+      // const reader = new FileReader()
+
+      // reader.onload = (evt) => {
+      //   // reset
+      //   this.allTimes = []
+      //   this.users = []
+      //   this.userOptions = []
+
+      //   this.inputData = evt.target.result
+
+      //   this.isGranularitySelectDisabled = false
+      //   this.isUserSelectDisabled = false
+      //   Loading.hide()
+      // }
+
+      // reader.readAsText(file)
     },
     /**
      * 描述
@@ -270,7 +287,9 @@ export default {
         this.users.push(prop)
         this.userOptions.push({ label: prop, value: prop })
       }
-      this.user = this.users[0]
+
+      if (!this.user) this.user = this.users[0]
+      // localStorage.setItem('users', JSON.stringify(this.users))
 
       return parsedData
     },
